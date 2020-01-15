@@ -33,11 +33,13 @@ jobs:
         mix deps.get
 
     # Checks
-    - name: Run compiler
+    - name: Compiler warnings
       run: mix compile --warnings-as-errors --force
-    - name: Run formatter
+    - name: Code format
       run: mix format --check-formatted --dry-run
-    - name: Run Credo
+    - name: Code conventions (Credo)
       run: mix credo
-    - name: Run tests
+    - name: Test suite
       run: mix test
+    - name: Static code analysis (Dialyzer)
+      run: mix dialyzer
