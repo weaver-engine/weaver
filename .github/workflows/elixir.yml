@@ -13,12 +13,12 @@ jobs:
     - uses: actions/checkout@v1
 
     # Caching
-    - name: Cache dependencies
+    - name: Load dependencies cache
       uses: actions/cache@v1
       with:
         path: deps
         key: deps-${{ hashFiles('mix.lock') }}
-    - name: Cache build artifacts
+    - name: Load build cache
       uses: actions/cache@v1
       with:
         path: _build
