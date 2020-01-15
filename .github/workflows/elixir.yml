@@ -34,7 +34,9 @@ jobs:
 
     # Checks
     - name: Compiler warnings
-      run: mix compile --warnings-as-errors --force
+      run: |
+        mix compile --warnings-as-errors --force
+        WARNINGS_AS_ERRORS=true mix test
     - name: Code format
       run: mix format --check-formatted --dry-run
     - name: Code conventions (Credo)
