@@ -1,0 +1,46 @@
+name: Elixir CI
+
+on: push
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+
+    container:
+      image: elixir:1.9.4-alpine
+
+    steps:
+    - uses: actions/checkout@v1
+
+    # Caching
+    - name: Dependencies cache
+      uses: actions/cache@v1
+      with:
+        path: deps
+        key: deps-${{ hashFiles('mix.lock') }}
+    - name: Build cache
+      uses: actions/cache@v1
+      with:
+        path: _build
+        key: build-${{ hashFiles('mix.lock') }}
+
+    # Setup
+    - name: Install dependencies
+      run: |
+        mix local.rebar --force
+        mix local.hex --force
+        mix deps.get
+
+    # Checks
+    - name: Compiler warnings
+      run: |
+        mix compile --warnings-as-errors --force
+        WARNINGS_AS_ERRORS=true mix test
+    - name: Code format
+      run: mix format --check-formatted --dry-run
+    - name: Code conventions (Credo)
+      run: mix credo
+    - name: Test suite
+      run: mix test
+    - name: Static code analysis (Dialyzer)
+      run: mix dialyzer
