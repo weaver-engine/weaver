@@ -18,12 +18,12 @@ jobs:
       uses: actions/cache@v1
       with:
         path: deps
-        key: deps
+        key: deps-${{ hashFiles('mix.lock') }}
     - name: Cache build artifacts
       uses: actions/cache@v1
       with:
         path: _build
-        key: build
+        key: build-${{ hashFiles('mix.lock') }}
 
     # Setup
     - name: Install dependencies
