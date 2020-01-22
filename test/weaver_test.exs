@@ -24,9 +24,7 @@ defmodule WeaverTest do
     :ok
   end
 
-  test "query" do
-    query = Weaver.query(@query)
-
-    refute query.result.errors
+  test "parse" do
+    assert {_ast, _fun_env} = Weaver.parse_query(@query)
   end
 end

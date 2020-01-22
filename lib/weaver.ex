@@ -49,25 +49,6 @@ defmodule Weaver do
     end
   end
 
-  def query(query, operation \\ "", variables \\ %{}) when is_map(variables) do
-    with {ast, fun_env} <- parse_query(query) do
-      coerced = :graphql.type_check_params(fun_env, operation, variables)
-      context = %{params: coerced, operation_name: operation}
-      result = :graphql.execute(context, ast)
-
-      %GraphQL.Query{
-        query: query,
-        operation: operation,
-        params: coerced,
-        environment: fun_env,
-        result: struct(GraphQL.Query.Result, result)
-      }
-    else
-      # todo, handle errors
-      _ -> nil
-    end
-  end
-
   def load_schema() do
     with :ok = :graphql.load_schema(mapping(), schema()),
          :ok = :graphql.insert_schema_definition(root_schema()),
