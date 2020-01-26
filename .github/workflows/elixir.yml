@@ -13,9 +13,10 @@ jobs:
       dgraph:
         image: dgraph/standalone
         ports:
-          - '8000:8000'
-          - '8080:8080'
-          - '9080:9080'
+          - '8001:8000'
+          - '8081:8080'
+          - '9081:9080'
+        options: --health-cmd "curl -sSf http://localhost:8080/health > /dev/null" --health-interval 5s --health-timeout 5s --health-retries 5
 
     steps:
     - uses: actions/checkout@v1
