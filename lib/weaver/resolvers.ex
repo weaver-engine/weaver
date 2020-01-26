@@ -1,4 +1,12 @@
 defmodule Weaver.Resolvers do
+  @moduledoc """
+  Weaver-style GraphQL resolvers used in tests.
+
+  Resolvers can return `{:retrieve, object, predicate}` to declare that
+  it takes another API call to resolve this predicate/edge. It will be
+  returned as dispatched event and should be handled by the caller.
+  """
+
   alias Weaver.{Cursor, Ref}
   alias ExTwitter.Model.{Tweet, User}
 

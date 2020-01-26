@@ -1,8 +1,19 @@
 defmodule Weaver do
+  @moduledoc """
+  Root module and main API of Weaver.
+  """
+
   alias Weaver.GraphQL
   alias Weaver.GraphQL.Resolver
 
   defmodule Tree do
+    @moduledoc """
+    Represents a node in a request, including its (sub)tree of the request.
+    Also holds operational meta data about the query.
+
+    Used to pass to Weaver as the main unit of work.
+    """
+
     @enforce_keys [
       :ast
     ]
@@ -26,6 +37,13 @@ defmodule Weaver do
   end
 
   defmodule Ref do
+    @moduledoc """
+    References a node in the graph using a globally unique `id`.
+
+    Used as placeholder in any graph tuples, such as for storing
+    and retrieval in `Weaver.Graph`.
+    """
+
     @enforce_keys [:id]
     defstruct @enforce_keys
 
@@ -33,6 +51,14 @@ defmodule Weaver do
   end
 
   defmodule Cursor do
+    @moduledoc """
+    References a position in a timeline used for resuming the
+    retrieval at a previous point if needed.
+
+    Can be stored as meta data together with the actual graph
+    data in `Weaver.Graph`.
+    """
+
     @enforce_keys [:ref, :val]
     defstruct @enforce_keys ++ [:gap]
 
@@ -50,9 +76,9 @@ defmodule Weaver do
   end
 
   def load_schema() do
-    with :ok = :graphql.load_schema(mapping(), schema()),
-         :ok = :graphql.insert_schema_definition(root_schema()),
-         :ok = :graphql.validate_schema() do
+    with :ok <- :graphql.load_schema(mapping(), schema()),
+         :ok <- :graphql.insert_schema_definition(root_schema()),
+         :ok <- :graphql.validate_schema() do
       :ok
     end
   end

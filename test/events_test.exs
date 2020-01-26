@@ -35,15 +35,15 @@ defmodule Weaver.EventsTest do
   """
 
   setup do
-    {:ok, pid} = Weaver.Graph.start_link(nil)
-    {:ok, pid} = Dlex.start_link(name: Dlex, port: 9081)
+    {:ok, _pid} = Weaver.Graph.start_link(nil)
+    {:ok, _pid} = Dlex.start_link(name: Dlex, port: 9081)
     Weaver.Graph.reset!()
     :ok
   end
 
   setup do
     user = build(ExTwitter.Model.User, screen_name: "elixirdigest")
-    favorites = build(ExTwitter.Model.Tweet, 10, fn i -> [id: 11 - i] end) |> IO.inspect()
+    favorites = build(ExTwitter.Model.Tweet, 10, fn i -> [id: 11 - i] end)
 
     {:ok, user: user, favorites: favorites}
   end

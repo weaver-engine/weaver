@@ -1,6 +1,20 @@
 defmodule Weaver.Events do
+  @moduledoc """
+  Core module handling events.
+  """
+
   alias Weaver.{Cursor, Ref, Resolvers, Tree}
 
+  @doc """
+  Takes a job (`Weaver.Tree`) or a list of jobs to be handled.
+
+  Returns a tuple of
+  - a list of dispatched jobs that should be handled on the
+  next level of the graph (may be an empty list)
+  - a job to be handled next on the same level of the graph (may be nil)
+  """
+  @spec handle(Weaver.Tree.t() | list(Weaver.Tree.t())) ::
+          {list(Weaver.Tree.t()), Weaver.Tree.t() | nil}
   def handle(event) do
     do_handle(event)
   end
@@ -52,15 +66,13 @@ defmodule Weaver.Events do
   end
 
   def do_handle(
-        event = %Tree{
+        %Tree{
           ast: {:field, {:name, _, field}, [], [], [], :undefined, _schema_info},
           data: parent_obj
         },
         state
       ) do
-    value =
-      Resolvers.resolve_leaf(parent_obj, field)
-      |> IO.inspect(label: field)
+    value = Resolvers.resolve_leaf(parent_obj, field)
 
     parent_ref =
       parent_obj
@@ -152,10 +164,9 @@ defmodule Weaver.Events do
     {objs, state} =
       case Resolvers.retrieve(parent_obj, opts, event.cursor) do
         {:continue, objs, cursor} ->
-          IO.inspect("next #{length(objs)} #{opts}", label: "RETRIEVED")
-
           case event.gap do
             %Cursor{ref: %Ref{id: gap_id}} ->
+              # credo:disable-for-next-line Credo.Check.Refactor.Nesting
               case Enum.split_while(objs, &(Resolvers.id_for(&1) != gap_id)) do
                 {objs, []} ->
                   # gap not closed -> continue with this cursor
@@ -181,7 +192,6 @@ defmodule Weaver.Events do
           end
 
         {:done, objs} ->
-          IO.inspect("last #{length(objs)} #{opts}", label: "RETRIEVED")
           {objs, nil}
       end
 
@@ -195,23 +205,17 @@ defmodule Weaver.Events do
   end
 
   defp continue_with(event, subtree, state) do
-    IO.inspect(event, label: "ORIGINAL")
-
     for elem <- subtree do
       %{event | ast: elem}
     end
     |> do_handle(state)
-    |> IO.inspect(label: "RESULT none")
   end
 
   defp continue_with(objs, event, subtree, state) when is_list(objs) do
-    IO.inspect(event, label: "ORIGINAL")
-
     for obj <- objs, elem <- subtree do
       %{event | data: obj, ast: elem}
     end
     |> do_handle(state)
-    |> IO.inspect(label: "RESULT objs")
   end
 
   defp continue_with(obj, event, subtree, state) do

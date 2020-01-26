@@ -1,4 +1,8 @@
 defmodule Weaver.Graph do
+  @moduledoc """
+  Stores edges and cursors in the dgraph graph database using the `dlex` client library.
+  """
+
   use GenServer
 
   alias Weaver.{Cursor, Ref}
@@ -81,7 +85,7 @@ defmodule Weaver.Graph do
   @impl GenServer
   def handle_call({:store, tuples}, _from, state) do
     varnames = varnames_for(tuples)
-    query = upsert_query_for(varnames) |> IO.inspect(label: "UPSERT QUERY")
+    query = upsert_query_for(varnames)
 
     statement =
       tuples
@@ -107,12 +111,9 @@ defmodule Weaver.Graph do
 
           "#{sub} <#{predicate}> #{obj} (#{facets})."
       end)
-      |> IO.inspect(label: "UPSERT STATE")
       |> Enum.join("\n")
 
-    result =
-      Dlex.mutate(Dlex, %{query: query}, statement, timeout: @timeout)
-      |> IO.inspect(label: "UPSERT")
+    result = Dlex.mutate(Dlex, %{query: query}, statement, timeout: @timeout)
 
     {:reply, result, state}
   end
