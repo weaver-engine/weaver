@@ -36,7 +36,12 @@ defmodule Weaver.EventsTest do
 
   setup do
     {:ok, _pid} = Weaver.Graph.start_link(nil)
-    {:ok, _pid} = Dlex.start_link(name: Dlex, port: 9081)
+
+    {:ok, _pid} =
+      Application.get_env(:weaver, :dgraph, [])
+      |> Keyword.merge(name: Dlex)
+      |> Dlex.start_link()
+
     Weaver.Graph.reset!()
     :ok
   end
