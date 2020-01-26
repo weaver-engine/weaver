@@ -13,8 +13,7 @@ defmodule Weaver.Events do
   next level of the graph (may be an empty list)
   - a job to be handled next on the same level of the graph (may be nil)
   """
-  @spec handle(Weaver.Tree.t() | list(Weaver.Tree.t())) ::
-          {list(Weaver.Tree.t()), Weaver.Tree.t() | nil}
+  @spec handle(Tree.t() | list(Tree.t())) :: {list(Tree.t()), Tree.t() | nil}
   def handle(event) do
     do_handle(event)
   end

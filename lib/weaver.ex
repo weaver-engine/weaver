@@ -34,6 +34,23 @@ defmodule Weaver do
                   gap: :not_loaded,
                   count: 0
                 ]
+
+    @type t() :: %__MODULE__{
+            ast: tuple(),
+            callback: function() | nil,
+            source_graph: module() | nil,
+            data: any(),
+            uid: any(),
+            fun_env: function(),
+            operation: String.t() | nil,
+            variables: map(),
+            cursor: Weaver.Cursor.t() | nil,
+            refresh: boolean(),
+            backfill: boolean(),
+            refreshed: boolean(),
+            gap: any(),
+            count: non_neg_integer()
+          }
   end
 
   defmodule Ref do
@@ -46,6 +63,10 @@ defmodule Weaver do
 
     @enforce_keys [:id]
     defstruct @enforce_keys
+
+    @type t() :: %__MODULE__{
+            id: String.t()
+          }
 
     def new(id), do: %__MODULE__{id: id}
   end
@@ -61,6 +82,11 @@ defmodule Weaver do
 
     @enforce_keys [:ref, :val]
     defstruct @enforce_keys ++ [:gap]
+
+    @type t() :: %__MODULE__{
+            ref: any(),
+            val: any()
+          }
 
     def new(ref, val, gap \\ nil) do
       %__MODULE__{ref: ref, val: val, gap: gap}
