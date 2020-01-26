@@ -13,10 +13,10 @@ jobs:
       dgraph:
         image: dgraph/standalone
         ports:
-          - '8001:8000'
-          - '8081:8080'
-          - '9081:9080'
-        options: --health-cmd "curl -sSf http://localhost:8080/health > /dev/null" --health-interval 5s --health-timeout 5s --health-retries 5
+          - 8000:8000
+          - 8080:8080
+          - 9080:9080
+        options: --health-cmd "curl -sSf http://localhost:8080/health"
 
     steps:
     - uses: actions/checkout@v1
@@ -47,6 +47,7 @@ jobs:
         WARNINGS_AS_ERRORS=true mix test
       env:
         DGRAPH_HOST: dgraph
+        DGRAPH_PORT: ${{ job.services.dgraph.ports[9080] }}
     - name: Code format
       run: mix format --check-formatted --dry-run
     - name: Code conventions (Credo)
@@ -55,5 +56,6 @@ jobs:
       run: mix test
       env:
         DGRAPH_HOST: dgraph
+        DGRAPH_PORT: ${{ job.services.dgraph.ports[9080] }}
     - name: Static code analysis (Dialyzer)
       run: mix dialyzer

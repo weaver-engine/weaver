@@ -7,5 +7,5 @@ config :weaver, :twitter,
 
 config :weaver, :dgraph,
   host: System.get_env("DGRAPH_HOST") || "localhost",
-  port: 9081,
+  port: String.to_integer(System.get_env("DGRAPH_PORT") || "9081"),
   show_sensitive_data_on_connection_error: true
