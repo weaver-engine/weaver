@@ -31,6 +31,7 @@ defmodule Weaver.MixProject do
     [
       {:jason, "~> 1.1"},
       {:graphql, "~> 0.15.0", hex: :graphql_erl},
+      {:gen_stage, github: "weaver-engine/gen_stage", branch: "prosumer"},
       {:dlex, "0.4.1"},
       {:extwitter, "~> 0.9.0"},
 

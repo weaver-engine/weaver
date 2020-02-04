@@ -93,6 +93,19 @@ defmodule Weaver do
     end
   end
 
+  def weave(query, opts \\ []) do
+    {ast, fun_env} = parse_query(query)
+
+    %Weaver.Tree{
+      ast: ast,
+      fun_env: fun_env,
+      source_graph: Keyword.get(opts, :source_graph),
+      operation: Keyword.get(opts, :operation, ""),
+      variables: Keyword.get(opts, :variables, %{})
+    }
+    |> Weaver.GenStage.Producer.add()
+  end
+
   def parse_query(query) do
     with {:ok, ast} <- :graphql.parse(query),
          {:ok, %{ast: ast, fun_env: fun_env}} <- :graphql.type_check(ast),
