@@ -14,6 +14,21 @@ def deps do
 end
 ```
 
+To use [Loom](#loom), also add the forked version of `GenStage`:
+
+```elixir
+def deps do
+  [
+    {:weaver, github: "weaver-engine/weaver"},
+    {:gen_stage, github: "weaver-engine/gen_stage", branch: "prosumer"}
+  ]
+end
+```
+
+The fork is equivalent to `GenStage`, except some checks are removed to
+allow for `producer` modules to also subscribe to other Producers (see
+[diff](https://github.com/elixir-lang/gen_stage/compare/master...weaver-engine:prosumer)).
+
 ## Loom
 
 While `Weaver.weave` only runs a single step at a time and returns the results,
