@@ -1,9 +1,9 @@
 defmodule Weaver.Loom.Prosumer do
   @moduledoc """
-  Represents a worker that handles one `Weaver.Tree` job at a time.
+  Represents a worker that handles one `Weaver.Step` job at a time.
   Dispatched jobs are passed to the `GenStage` level below after each call
-  to `Weaver.Events.handle/1`. A job is passed again to `Weaver.Events.handle/1`
-  as long as it returns a continuation (`Weaver.Tree` with a `:cursor`).
+  to `Weaver.Step.handle/1`. A job is passed again to `Weaver.Step.handle/1`
+  as long as it returns a continuation (`Weaver.Step` with a `:cursor`).
   Otherwise, it sends demand to the `GenStage` level above.
 
   Implements a `GenStage` `producer` that is also a `consumer` with manual

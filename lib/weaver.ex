@@ -3,55 +3,8 @@ defmodule Weaver do
   Root module and main API of Weaver.
   """
 
-  alias Weaver.GraphQL
+  alias Weaver.{GraphQL, Step}
   alias Weaver.GraphQL.Resolver
-
-  defmodule Tree do
-    @moduledoc """
-    Represents a node in a request, including its (sub)tree of the request.
-    Also holds operational meta data about the query.
-
-    Used to pass to Weaver as the main unit of work.
-    """
-
-    @enforce_keys [
-      :ast
-    ]
-
-    defstruct @enforce_keys ++
-                [
-                  :callback,
-                  :source_graph,
-                  :data,
-                  :uid,
-                  :fun_env,
-                  :operation,
-                  :variables,
-                  :cursor,
-                  refresh: true,
-                  backfill: true,
-                  refreshed: false,
-                  gap: :not_loaded,
-                  count: 0
-                ]
-
-    @type t() :: %__MODULE__{
-            ast: tuple(),
-            callback: function() | nil,
-            source_graph: module() | nil,
-            data: any(),
-            uid: any(),
-            fun_env: function(),
-            operation: String.t() | nil,
-            variables: map(),
-            cursor: Weaver.Cursor.t() | nil,
-            refresh: boolean(),
-            backfill: boolean(),
-            refreshed: boolean(),
-            gap: any(),
-            count: non_neg_integer()
-          }
-  end
 
   defmodule Ref do
     @moduledoc """
@@ -96,7 +49,7 @@ defmodule Weaver do
   def prepare(query, opts \\ []) do
     {ast, fun_env} = parse_query(query)
 
-    %Weaver.Tree{
+    %Step{
       ast: ast,
       fun_env: fun_env,
       source_graph: Keyword.get(opts, :source_graph),
@@ -112,9 +65,8 @@ defmodule Weaver do
     |> weave()
   end
 
-  def weave(tree = %Weaver.Tree{}, _opts) do
-    tree
-    |> Weaver.Events.handle()
+  def weave(step = %Step{}, _opts) do
+    Step.handle(step)
   end
 
   def parse_query(query) do

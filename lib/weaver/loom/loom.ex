@@ -40,9 +40,8 @@ defmodule Weaver.Loom do
     |> weave()
   end
 
-  def weave(tree = %Weaver.Tree{}, _opts) do
-    tree
-    |> Producer.add()
+  def weave(step = %Weaver.Step{}, _opts) do
+    Producer.add(step)
   end
 
   def init(:ok) do

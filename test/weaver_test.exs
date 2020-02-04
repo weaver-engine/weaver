@@ -10,6 +10,6 @@ defmodule WeaverTest do
   """
 
   test "prepare" do
-    assert %Weaver.Tree{} = Weaver.prepare(@query)
+    assert %Weaver.Step{} = Weaver.prepare(@query)
   end
 end
