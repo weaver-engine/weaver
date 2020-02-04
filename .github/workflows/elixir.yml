@@ -54,5 +54,7 @@ jobs:
         WARNINGS_AS_ERRORS: true
         DGRAPH_HOST: localhost
         DGRAPH_PORT: ${{ job.services.dgraph.ports[9080] }}
+    - name: Generate docs
+      run: mix docs
     - name: Static code analysis (Dialyzer)
       run: mix dialyzer
