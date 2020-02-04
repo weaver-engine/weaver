@@ -109,7 +109,7 @@ defmodule Weaver.Loom.Prosumer do
     state = %{state | status: :working}
 
     try do
-      {events, retrieval} = Weaver.Events.handle(event)
+      {events, retrieval} = Weaver.Step.handle(event)
       noreply(events, %{state | retrieval: retrieval})
     rescue
       e in ExTwitter.RateLimitExceededError ->
