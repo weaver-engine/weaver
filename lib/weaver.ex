@@ -1,18 +1,142 @@
 defmodule Weaver do
   @moduledoc """
-  Documentation for Weaver.
+  Root module and main API of Weaver.
   """
 
-  @doc """
-  Hello world.
+  alias Weaver.GraphQL
+  alias Weaver.GraphQL.Resolver
 
-  ## Examples
+  defmodule Tree do
+    @moduledoc """
+    Represents a node in a request, including its (sub)tree of the request.
+    Also holds operational meta data about the query.
 
-      iex> Weaver.hello()
-      :world
+    Used to pass to Weaver as the main unit of work.
+    """
 
-  """
-  def hello do
-    :world
+    @enforce_keys [
+      :ast
+    ]
+
+    defstruct @enforce_keys ++
+                [
+                  :callback,
+                  :source_graph,
+                  :data,
+                  :uid,
+                  :fun_env,
+                  :operation,
+                  :variables,
+                  :cursor,
+                  refresh: true,
+                  backfill: true,
+                  refreshed: false,
+                  gap: :not_loaded,
+                  count: 0
+                ]
+
+    @type t() :: %__MODULE__{
+            ast: tuple(),
+            callback: function() | nil,
+            source_graph: module() | nil,
+            data: any(),
+            uid: any(),
+            fun_env: function(),
+            operation: String.t() | nil,
+            variables: map(),
+            cursor: Weaver.Cursor.t() | nil,
+            refresh: boolean(),
+            backfill: boolean(),
+            refreshed: boolean(),
+            gap: any(),
+            count: non_neg_integer()
+          }
+  end
+
+  defmodule Ref do
+    @moduledoc """
+    References a node in the graph using a globally unique `id`.
+
+    Used as placeholder in any graph tuples, such as for storing
+    and retrieval in `Weaver.Graph`.
+    """
+
+    @enforce_keys [:id]
+    defstruct @enforce_keys
+
+    @type t() :: %__MODULE__{
+            id: String.t()
+          }
+
+    def new(id), do: %__MODULE__{id: id}
+  end
+
+  defmodule Cursor do
+    @moduledoc """
+    References a position in a timeline used for resuming the
+    retrieval at a previous point if needed.
+
+    Can be stored as meta data together with the actual graph
+    data in `Weaver.Graph`.
+    """
+
+    @enforce_keys [:ref, :val]
+    defstruct @enforce_keys ++ [:gap]
+
+    @type t() :: %__MODULE__{
+            ref: any(),
+            val: any()
+          }
+
+    def new(ref, val, gap \\ nil) do
+      %__MODULE__{ref: ref, val: val, gap: gap}
+    end
+  end
+
+  def parse_query(query) do
+    with {:ok, ast} <- :graphql.parse(query),
+         {:ok, %{ast: ast, fun_env: fun_env}} <- :graphql.type_check(ast),
+         :ok <- :graphql.validate(ast) do
+      {ast, fun_env}
+    end
+  end
+
+  def load_schema() do
+    with :ok <- :graphql.load_schema(mapping(), schema()),
+         :ok <- :graphql.insert_schema_definition(root_schema()),
+         :ok <- :graphql.validate_schema() do
+      :ok
+    end
+  end
+
+  defp schema() do
+    [File.cwd!(), "priv", "weaver", "schema.graphql"]
+    |> Path.join()
+    |> File.read!()
+  end
+
+  defp root_schema() do
+    {:root,
+     %{
+       :query => "Query",
+       :mutation => "Mutation",
+       :interfaces => ["Node"]
+     }}
+  end
+
+  defp mapping() do
+    %{
+      scalars: %{default: GraphQL.Scalar.Default},
+      interfaces: %{default: GraphQL.Interface.Default},
+      unions: %{default: GraphQL.Union.Default},
+      enums: %{default: GraphQL.Enum.Default},
+      objects: %{
+        Query: Resolver.QueryRoot,
+        Mutation: Resolver.Mutation,
+        TwitterUser: Weaver.Twitter.User,
+        Tweet: Weaver.Twitter.Tweet,
+        default: Resolver.Default
+      }
+    }
   end
 end

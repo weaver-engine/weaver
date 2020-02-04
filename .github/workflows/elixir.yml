@@ -9,6 +9,15 @@ jobs:
     container:
       image: elixir:1.9.4-alpine
 
+    services:
+      dgraph:
+        image: dgraph/standalone
+        ports:
+          - 8000:8000
+          - 8080:8080
+          - 9080:9080
+        options: --health-cmd "curl -sSf http://localhost:8080/health"
+
     steps:
     - uses: actions/checkout@v1
 
@@ -36,11 +45,17 @@ jobs:
       run: |
         mix compile --warnings-as-errors --force
         WARNINGS_AS_ERRORS=true mix test
+      env:
+        DGRAPH_HOST: dgraph
+        DGRAPH_PORT: ${{ job.services.dgraph.ports[9080] }}
     - name: Code format
       run: mix format --check-formatted --dry-run
     - name: Code conventions (Credo)
       run: mix credo
     - name: Test suite
       run: mix test
+      env:
+        DGRAPH_HOST: dgraph
+        DGRAPH_PORT: ${{ job.services.dgraph.ports[9080] }}
     - name: Static code analysis (Dialyzer)
       run: mix dialyzer

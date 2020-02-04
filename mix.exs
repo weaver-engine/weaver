@@ -6,6 +6,7 @@ defmodule Weaver.MixProject do
       app: :weaver,
       version: "0.1.0",
       elixir: "~> 1.9",
+      elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       dialyzer: [
         flags: [:unmatched_returns, :error_handling, :race_conditions, :no_opaque]
@@ -21,15 +22,24 @@ defmodule Weaver.MixProject do
     ]
   end
 
+  # Specifies which paths to compile per environment.
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_), do: ["lib"]
+
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      # {:dep_from_hexpm, "~> 0.3.0"},
-      # {:dep_from_git, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"}
+      {:jason, "~> 1.1"},
+      {:graphql, "~> 0.15.0", hex: :graphql_erl},
+      {:dlex, "0.4.1"},
+      {:extwitter, "~> 0.9.0"},
 
       # Dev & Test
       {:credo, "~> 1.1", only: :dev, runtime: false},
-      {:dialyxir, "~> 1.0.0-rc.7", only: :dev, runtime: false}
+      {:dialyxir, "~> 1.0.0-rc.7", only: :dev, runtime: false},
+      {:mox, "~> 0.5", only: :test},
+      {:faker, "~> 0.12", only: [:dev, :test]},
+      {:mix_test_watch, "~> 0.9", only: :dev, runtime: false}
     ]
   end
 end
