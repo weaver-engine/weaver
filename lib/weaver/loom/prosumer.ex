@@ -1,4 +1,4 @@
-defmodule Weaver.GenStage.Prosumer do
+defmodule Weaver.Loom.Prosumer do
   @moduledoc """
   Represents a worker that handles one `Weaver.Tree` job at a time.
   Dispatched jobs are passed to the `GenStage` level below after each call

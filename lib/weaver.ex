@@ -93,7 +93,7 @@ defmodule Weaver do
     end
   end
 
-  def weave(query, opts \\ []) do
+  def prepare(query, opts \\ []) do
     {ast, fun_env} = parse_query(query)
 
     %Weaver.Tree{
@@ -103,7 +103,18 @@ defmodule Weaver do
       operation: Keyword.get(opts, :operation, ""),
       variables: Keyword.get(opts, :variables, %{})
     }
-    |> Weaver.GenStage.Producer.add()
+  end
+
+  def weave(query, opts \\ [])
+
+  def weave(query, opts) when is_binary(query) do
+    prepare(query, opts)
+    |> weave()
+  end
+
+  def weave(tree = %Weaver.Tree{}, _opts) do
+    tree
+    |> Weaver.Events.handle()
   end
 
   def parse_query(query) do

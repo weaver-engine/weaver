@@ -4,6 +4,6 @@ end
 
 Weaver.load_schema()
 
-{:ok, _pid} = Weaver.Supervisor.start_link(nil)
+{:ok, _pid} = Weaver.Loom.start_link(nil)
 
 ExUnit.start()

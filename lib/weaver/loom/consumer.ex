@@ -1,4 +1,4 @@
-defmodule Weaver.GenStage.Consumer do
+defmodule Weaver.Loom.Consumer do
   @moduledoc """
   Represents a worker at the bottom `GenStage` level.
   Dispatched jobs are handled recursively via `Weaver.Events.handle/1`.

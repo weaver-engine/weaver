@@ -1,4 +1,4 @@
-defmodule Weaver.GenStage.Producer do
+defmodule Weaver.Loom.Producer do
   @moduledoc """
   Represents a worker at the root `GenStage` level.
   Dispatched jobs are passed to the `GenStage` level below after each call
