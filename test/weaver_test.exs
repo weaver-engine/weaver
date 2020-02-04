@@ -1,6 +1,12 @@
 defmodule WeaverTest do
   use ExUnit.Case, async: false
 
+  import Test.Support.Factory
+  import Mox
+
+  alias Weaver.ExTwitter.Mock, as: Twitter
+  alias ExTwitter.Model.User, as: TwitterUser
+
   @query """
   query {
     node(id: "TwitterUser:elixirdigest") {
