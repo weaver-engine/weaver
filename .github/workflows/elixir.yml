@@ -6,9 +6,6 @@ jobs:
   checks:
     runs-on: ubuntu-latest
 
-    container:
-      image: elixir:1.9.4-alpine
-
     services:
       dgraph:
         image: dgraph/standalone
@@ -20,6 +17,10 @@ jobs:
 
     steps:
     - uses: actions/checkout@v1
+    - uses: actions/setup-elixir@v1
+      with:
+        otp-version: 22.2.2
+        elixir-version: 1.9.4
 
     # Caching
     - name: Dependencies cache
@@ -35,19 +36,11 @@ jobs:
 
     # Setup
     - name: Install dependencies
-      run: |
-        mix local.rebar --force
-        mix local.hex --force
-        mix deps.get
+      run: mix deps.get
 
     # Checks
     - name: Compiler warnings
-      run: |
-        mix compile --warnings-as-errors --force
-        WARNINGS_AS_ERRORS=true mix test
-      env:
-        DGRAPH_HOST: dgraph
-        DGRAPH_PORT: ${{ job.services.dgraph.ports[9080] }}
+      run: mix compile --warnings-as-errors --force
     - name: Code format
       run: mix format --check-formatted --dry-run
     - name: Code conventions (Credo)
@@ -55,6 +48,7 @@ jobs:
     - name: Test suite
       run: mix test
       env:
+        WARNINGS_AS_ERRORS: true
         DGRAPH_HOST: dgraph
         DGRAPH_PORT: ${{ job.services.dgraph.ports[9080] }}
     - name: Static code analysis (Dialyzer)
