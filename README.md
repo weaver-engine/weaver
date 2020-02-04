@@ -27,12 +27,14 @@ end
 
 The fork is equivalent to `GenStage`, except some checks are removed to
 allow for `producer` modules to also subscribe to other Producers (see
-[diff](https://github.com/elixir-lang/gen_stage/compare/master...weaver-engine:prosumer)).
+[diff](https://github.com/elixir-lang/gen_stage/compare/master...weaver-engine:prosumer)
+and [issue comment](https://github.com/elixir-lang/gen_stage/issues/214#issuecomment-432434476)
+by José Valim).
 
 ## Loom
 
 While `Weaver.weave` only runs a single step at a time and returns the results,
-Loom helps to run all required steps to stream a query. Under the hood it
+Loom helps to run all required steps and streams the results. Under the hood it
 supervises a topology of `GenStage` workers that you can run as part of your
 supervision tree:
 
@@ -53,4 +55,4 @@ defmodule MyApp.Application do
 end
 ```
 
-To weave a query, call `Weaver.Loom.weave`.
+To stream a query, call `Weaver.Loom.weave`.
