@@ -34,6 +34,9 @@ defmodule Weaver.MixProject do
       {:dlex, "0.4.1"},
       {:extwitter, "~> 0.9.0"},
 
+      # must be added by the main app
+      {:gen_stage, github: "weaver-engine/gen_stage", branch: "prosumer", only: [:dev, :test]},
+
       # Dev & Test
       {:credo, "~> 1.1", only: :dev, runtime: false},
       {:dialyxir, "~> 1.0.0-rc.7", only: :dev, runtime: false},

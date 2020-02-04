@@ -93,6 +93,30 @@ defmodule Weaver do
     end
   end
 
+  def prepare(query, opts \\ []) do
+    {ast, fun_env} = parse_query(query)
+
+    %Weaver.Tree{
+      ast: ast,
+      fun_env: fun_env,
+      source_graph: Keyword.get(opts, :source_graph),
+      operation: Keyword.get(opts, :operation, ""),
+      variables: Keyword.get(opts, :variables, %{})
+    }
+  end
+
+  def weave(query, opts \\ [])
+
+  def weave(query, opts) when is_binary(query) do
+    prepare(query, opts)
+    |> weave()
+  end
+
+  def weave(tree = %Weaver.Tree{}, _opts) do
+    tree
+    |> Weaver.Events.handle()
+  end
+
   def parse_query(query) do
     with {:ok, ast} <- :graphql.parse(query),
          {:ok, %{ast: ast, fun_env: fun_env}} <- :graphql.type_check(ast),

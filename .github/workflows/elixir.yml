@@ -1,13 +1,13 @@
-name: Elixir CI
-
 on: push
 
 jobs:
   checks:
     runs-on: ubuntu-latest
-
-    container:
-      image: elixir:1.9.4-alpine
+    name: Elixir ${{matrix.elixir}} / OTP ${{matrix.otp}}
+    strategy:
+      matrix:
+        otp: [22.2.2]
+        elixir: [1.9.4]
 
     services:
       dgraph:
@@ -20,34 +20,30 @@ jobs:
 
     steps:
     - uses: actions/checkout@v1
+    - uses: actions/setup-elixir@v1
+      with:
+        otp-version: ${{matrix.otp}}
+        elixir-version: ${{matrix.elixir}}
 
     # Caching
     - name: Dependencies cache
       uses: actions/cache@v1
       with:
         path: deps
-        key: deps-${{ hashFiles('mix.lock') }}
+        key: deps-${{ hashFiles('mix.lock') }}-${{matrix.elixir}}-${{matrix.otp}}
     - name: Build cache
       uses: actions/cache@v1
       with:
         path: _build
-        key: build-${{ hashFiles('mix.lock') }}
+        key: build-${{ hashFiles('mix.lock') }}-${{matrix.elixir}}-${{matrix.otp}}
 
     # Setup
     - name: Install dependencies
-      run: |
-        mix local.rebar --force
-        mix local.hex --force
-        mix deps.get
+      run: mix deps.get
 
     # Checks
     - name: Compiler warnings
-      run: |
-        mix compile --warnings-as-errors --force
-        WARNINGS_AS_ERRORS=true mix test
-      env:
-        DGRAPH_HOST: dgraph
-        DGRAPH_PORT: ${{ job.services.dgraph.ports[9080] }}
+      run: mix compile --warnings-as-errors --force
     - name: Code format
       run: mix format --check-formatted --dry-run
     - name: Code conventions (Credo)
@@ -55,7 +51,8 @@ jobs:
     - name: Test suite
       run: mix test
       env:
-        DGRAPH_HOST: dgraph
+        WARNINGS_AS_ERRORS: true
+        DGRAPH_HOST: localhost
         DGRAPH_PORT: ${{ job.services.dgraph.ports[9080] }}
     - name: Static code analysis (Dialyzer)
       run: mix dialyzer
