@@ -4,14 +4,17 @@ defmodule Weaver.MixProject do
   def project do
     [
       app: :weaver,
-      version: "0.1.0",
+      version: "0.0.1",
       elixir: "~> 1.9",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       dialyzer: [
         flags: [:unmatched_returns, :error_handling, :race_conditions, :no_opaque]
       ],
-      deps: deps()
+      description: description(),
+      package: package(),
+      deps: deps(),
+      source_url: "https://github.com/weaver-engine/weaver"
     ]
   end
 
@@ -42,7 +45,20 @@ defmodule Weaver.MixProject do
       {:dialyxir, "~> 1.0.0-rc.7", only: :dev, runtime: false},
       {:mox, "~> 0.5", only: :test},
       {:faker, "~> 0.12", only: [:dev, :test]},
-      {:mix_test_watch, "~> 0.9", only: :dev, runtime: false}
+      {:mix_test_watch, "~> 0.9", only: :dev, runtime: false},
+      {:ex_doc, "~> 0.21", only: :dev, runtime: false}
+    ]
+  end
+
+  defp description() do
+    "A graph streaming engine."
+  end
+
+  defp package() do
+    [
+      files: ~w(lib .formatter.exs mix.exs README.md CHANGELOG.md LICENSE),
+      licenses: ["MIT"],
+      links: %{"GitHub" => "https://github.com/weaver-engine/weaver"}
     ]
   end
 end
