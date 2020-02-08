@@ -1,10 +1,10 @@
-defmodule Weaver.EventsTest do
+defmodule Weaver.StepTest do
   use ExUnit.Case, async: true
 
   import Test.Support.Factory
   import Mox
 
-  alias Weaver.{Cursor, Events}
+  alias Weaver.{Cursor, Step}
   alias Weaver.ExTwitter.Mock, as: Twitter
 
   @query """
@@ -55,18 +55,18 @@ defmodule Weaver.EventsTest do
 
   test "", %{user: user, favorites: favorites} do
     {ast, fun_env} = Weaver.parse_query(@query)
-    event = %Weaver.Tree{ast: ast, fun_env: fun_env}
+    step = %Step{ast: ast, fun_env: fun_env}
 
     expect(Twitter, :user, fn "elixirdigest" -> user end)
-    result = Events.handle(event)
+    result = Step.process(step)
     verify!()
 
-    assert {[event2], nil} = result
+    assert {[step2], nil} = result
 
     assert %{ast: {:retrieve, :favorites, _ast, "favorites"}, cursor: nil, gap: :not_loaded} =
-             event2
+             step2
 
-    assert user == event2.data
+    assert user == step2.data
 
     # favorites initial
     expect(Twitter, :favorites, fn [id: user_id, tweet_mode: :extended, count: count] ->
@@ -74,17 +74,17 @@ defmodule Weaver.EventsTest do
       Enum.take(favorites, count)
     end)
 
-    result = Events.handle(event2)
+    result = Step.process(step2)
     verify!()
 
-    assert {[event3a, event3b], event2_} = result
+    assert {[step3a, step3b], step2_} = result
 
     assert %{ast: {:retrieve, :favorites, _ast, "favorites"}, cursor: %Cursor{val: 10}, gap: nil} =
-             event2_
+             step2_
 
-    assert {:retrieve, :retweets, _ast, "retweets"} = event3a.ast
-    assert Enum.at(favorites, 0) == event3a.data
-    assert Enum.at(favorites, 1) == event3b.data
+    assert {:retrieve, :retweets, _ast, "retweets"} = step3a.ast
+    assert Enum.at(favorites, 0) == step3a.data
+    assert Enum.at(favorites, 1) == step3b.data
 
     # favorites pt. 2
     expect(Twitter, :favorites, fn [id: user_id, tweet_mode: :extended, count: count, max_id: 9] ->
@@ -92,15 +92,15 @@ defmodule Weaver.EventsTest do
       Enum.slice(favorites, 2, count)
     end)
 
-    result = Events.handle(event2_)
+    result = Step.process(step2_)
     verify!()
 
-    assert {[event3c, event3d], event2__} = result
+    assert {[step3c, step3d], step2__} = result
 
-    assert %{ast: {:retrieve, :favorites, _ast, "favorites"}, cursor: %Cursor{val: 8}} = event2__
+    assert %{ast: {:retrieve, :favorites, _ast, "favorites"}, cursor: %Cursor{val: 8}} = step2__
 
-    assert {:retrieve, :retweets, _ast, "retweets"} = event3c.ast
-    assert Enum.at(favorites, 2) == event3c.data
-    assert Enum.at(favorites, 3) == event3d.data
+    assert {:retrieve, :retweets, _ast, "retweets"} = step3c.ast
+    assert Enum.at(favorites, 2) == step3c.data
+    assert Enum.at(favorites, 3) == step3d.data
   end
 end

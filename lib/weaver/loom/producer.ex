@@ -1,11 +1,11 @@
 defmodule Weaver.Loom.Producer do
   @moduledoc """
   Represents a worker at the root `GenStage` level.
-  Dispatched jobs are passed to the `GenStage` level below after each call
-  to `Weaver.Events.handle/1`. A job is passed again to `Weaver.Events.handle/1`
-  as long as it returns a continuation (`Weaver.Tree` with a `:cursor`).
+  Dispatched steps are passed to the `GenStage` level below after each call
+  to `Weaver.Step.process/1`. A step is passed again to `Weaver.Step.process/1`
+  as long as it returns a continuation (`Weaver.Step` with a `:cursor`).
 
-  Implements a `GenStage` `producer` that receives its jobs via `add/1`.
+  Implements a `GenStage` `producer` that receives its steps via `add/1`.
   """
   use GenStage
 

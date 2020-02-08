@@ -1,52 +1,95 @@
-defmodule Weaver.Events do
+defmodule Weaver.Step do
   @moduledoc """
-  Core module handling events.
+  Core module handling steps.
+
+  Represents a node in a request, including its (sub)tree of the request.
+  Also holds operational meta data about the query.
+
+  Used to pass to Weaver as the main unit of work.
   """
 
-  alias Weaver.{Cursor, Ref, Resolvers, Tree}
+  @enforce_keys [
+    :ast
+  ]
+
+  defstruct @enforce_keys ++
+              [
+                :callback,
+                :source_graph,
+                :data,
+                :uid,
+                :fun_env,
+                :operation,
+                :variables,
+                :cursor,
+                refresh: true,
+                backfill: true,
+                refreshed: false,
+                gap: :not_loaded,
+                count: 0
+              ]
+
+  @type t() :: %__MODULE__{
+          ast: tuple(),
+          callback: function() | nil,
+          source_graph: module() | nil,
+          data: any(),
+          uid: any(),
+          fun_env: function(),
+          operation: String.t() | nil,
+          variables: map(),
+          cursor: Weaver.Cursor.t() | nil,
+          refresh: boolean(),
+          backfill: boolean(),
+          refreshed: boolean(),
+          gap: any(),
+          count: non_neg_integer()
+        }
+
+  alias Weaver.{Cursor, Ref, Resolvers, Step}
 
   @doc """
-  Takes a job (`Weaver.Tree`) or a list of jobs to be handled.
+  Takes a step or a list of steps to be processed.
 
   Returns a tuple of
-  - a list of dispatched jobs that should be handled on the
+  - a list of dispatched steps that should be processed on the
   next level of the graph (may be an empty list)
-  - a job to be handled next on the same level of the graph (may be nil)
+  - a step to be processed next on the same level of the graph (may be nil)
   """
-  @spec handle(Tree.t() | list(Tree.t())) :: {list(Tree.t()), Tree.t() | nil}
-  def handle(event) do
-    do_handle(event)
+  @spec process(Step.t() | list(Step.t())) :: {list(Step.t()), Step.t() | nil}
+  def process(step) do
+    do_process(step)
   end
 
-  def do_handle(events, state \\ nil)
+  def do_process(steps, state \\ nil)
 
-  def do_handle(events, state) when is_list(events) do
-    Enum.reduce(events, {[], state}, fn event, {results, state} ->
-      {new_results, state} = do_handle(event, state)
+  def do_process(steps, state) when is_list(steps) do
+    Enum.reduce(steps, {[], state}, fn step, {results, state} ->
+      {new_results, state} = do_process(step, state)
       {results ++ new_results, state}
     end)
   end
 
-  def do_handle(event = %Tree{ast: {:document, ops}}, state) do
-    continue_with(event, ops, state)
+  def do_process(step = %Step{ast: {:document, ops}}, state) do
+    continue_with(step, ops, state)
   end
 
-  def do_handle(
-        event = %Tree{ast: {:op, _type, _name, _vars, [], fields, _schema_info}},
+  def do_process(
+        step = %Step{ast: {:op, _type, _name, _vars, [], fields, _schema_info}},
         state
       ) do
-    continue_with(event, fields, state)
+    continue_with(step, fields, state)
   end
 
-  def do_handle(
-        event = %Tree{ast: {:frag, :..., {:name, _, _type}, [], fields, _schema_info}},
+  def do_process(
+        step = %Step{ast: {:frag, :..., {:name, _, _type}, [], fields, _schema_info}},
         state
       ) do
-    continue_with(event, fields, state)
+    continue_with(step, fields, state)
   end
 
-  def do_handle(
-        event = %Tree{
+  def do_process(
+        step = %Step{
           ast: {:field, {:name, _, "node"}, [{"id", %{value: id}}], _, fields, _, _schema_info}
         },
         state
@@ -54,18 +97,18 @@ defmodule Weaver.Events do
     id
     |> Resolvers.retrieve_by_id()
     |> store!()
-    |> continue_with(event, fields, state)
+    |> continue_with(step, fields, state)
   end
 
-  def do_handle(
-        %Tree{ast: {:field, {:name, _, "id"}, [], [], [], :undefined, _schema_info}},
+  def do_process(
+        %Step{ast: {:field, {:name, _, "id"}, [], [], [], :undefined, _schema_info}},
         state
       ) do
     {[], state}
   end
 
-  def do_handle(
-        %Tree{
+  def do_process(
+        %Step{
           ast: {:field, {:name, _, field}, [], [], [], :undefined, _schema_info},
           data: parent_obj
         },
@@ -83,8 +126,8 @@ defmodule Weaver.Events do
     {[], state}
   end
 
-  def do_handle(
-        event = %Tree{
+  def do_process(
+        step = %Step{
           ast: {:field, {:name, _, field}, [], [], fields, :undefined, _schema_info},
           data: parent_obj
         },
@@ -101,17 +144,17 @@ defmodule Weaver.Events do
     #       Weaver.Graph.stream(Resolvers.id_for(parent_obj), field)
     case Resolvers.resolve_node(parent_obj, field) do
       {:retrieve, ^parent_obj, opts} ->
-        event = %{event | ast: {:retrieve, opts, fields, field}}
-        {[event], state}
+        step = %{step | ast: {:retrieve, opts, fields, field}}
+        {[step], state}
 
       obj ->
         obj = store!(obj, [{parent_ref, field}])
-        continue_with(obj, event, fields, state)
+        continue_with(obj, step, fields, state)
     end
   end
 
-  def do_handle(
-        event = %Tree{
+  def do_process(
+        step = %Step{
           ast: {:retrieve, opts, _fields, _parent_field},
           data: parent_obj,
           gap: :not_loaded
@@ -124,23 +167,23 @@ defmodule Weaver.Events do
       |> Ref.new()
 
     cond do
-      event.refresh && !event.refreshed ->
+      step.refresh && !step.refreshed ->
         gap =
           Weaver.Graph.cursors!(parent_ref, opts, 1)
           |> List.first()
 
-        event = %{event | gap: gap}
+        step = %{step | gap: gap}
 
-        do_handle(event, state)
+        do_process(step, state)
 
-      event.backfill ->
+      step.backfill ->
         Weaver.Graph.cursors!(parent_ref, opts, 3)
         |> Enum.split_while(&(!&1.gap))
         |> case do
           {_refresh_end, [gap_start | rest]} ->
-            event = %{event | cursor: gap_start, gap: List.first(rest)}
+            step = %{step | cursor: gap_start, gap: List.first(rest)}
 
-            do_handle(event, state)
+            do_process(step, state)
 
           _else ->
             {[], nil}
@@ -151,8 +194,8 @@ defmodule Weaver.Events do
     end
   end
 
-  def do_handle(
-        event = %Tree{
+  def do_process(
+        step = %Step{
           ast: {:retrieve, opts, fields, parent_field},
           data: parent_obj
         },
@@ -161,24 +204,24 @@ defmodule Weaver.Events do
     parent_ref = parent_obj |> Resolvers.id_for() |> Ref.new()
 
     {objs, state} =
-      case Resolvers.retrieve(parent_obj, opts, event.cursor) do
+      case Resolvers.retrieve(parent_obj, opts, step.cursor) do
         {:continue, objs, cursor} ->
-          case event.gap do
+          case step.gap do
             %Cursor{ref: %Ref{id: gap_id}} ->
               # credo:disable-for-next-line Credo.Check.Refactor.Nesting
               case Enum.split_while(objs, &(Resolvers.id_for(&1) != gap_id)) do
                 {objs, []} ->
                   # gap not closed -> continue with this cursor
-                  state = %{event | cursor: cursor, count: event.count + length(objs)}
+                  state = %{step | cursor: cursor, count: step.count + length(objs)}
                   {objs, state}
 
                 {objs, _} ->
                   # gap closed
                   state = %{
-                    event
+                    step
                     | gap: :not_loaded,
                       refreshed: true,
-                      count: event.count + length(objs)
+                      count: step.count + length(objs)
                   }
 
                   {objs, state}
@@ -186,7 +229,7 @@ defmodule Weaver.Events do
 
             _else ->
               # no gap -> continue with this cursor
-              state = %{event | cursor: cursor, count: event.count + length(objs)}
+              state = %{step | cursor: cursor, count: step.count + length(objs)}
               {objs, state}
           end
 
@@ -194,31 +237,31 @@ defmodule Weaver.Events do
           {objs, nil}
       end
 
-    store!(objs, [{parent_ref, parent_field}], event.cursor)
+    store!(objs, [{parent_ref, parent_field}], step.cursor)
 
-    continue_with(objs, event, fields, state)
+    continue_with(objs, step, fields, state)
   end
 
-  def do_handle(event, _state) do
-    raise "Undhandled event:\n\n#{inspect(Map.from_struct(event), pretty: true)}"
+  def do_process(step, _state) do
+    raise "Undhandled step:\n\n#{inspect(Map.from_struct(step), pretty: true)}"
   end
 
-  defp continue_with(event, subtree, state) do
+  defp continue_with(step, subtree, state) do
     for elem <- subtree do
-      %{event | ast: elem}
+      %{step | ast: elem}
     end
-    |> do_handle(state)
+    |> do_process(state)
   end
 
-  defp continue_with(objs, event, subtree, state) when is_list(objs) do
+  defp continue_with(objs, step, subtree, state) when is_list(objs) do
     for obj <- objs, elem <- subtree do
-      %{event | data: obj, ast: elem}
+      %{step | data: obj, ast: elem}
     end
-    |> do_handle(state)
+    |> do_process(state)
   end
 
-  defp continue_with(obj, event, subtree, state) do
-    event
+  defp continue_with(obj, step, subtree, state) do
+    step
     |> Map.put(:data, obj)
     |> continue_with(subtree, state)
   end
