@@ -4,7 +4,7 @@ defmodule Weaver.Resolvers do
 
   Resolvers can return `{:retrieve, object, predicate}` to declare that
   it takes another API call to resolve this predicate/edge. It will be
-  returned as dispatched event and should be handled by the caller.
+  returned as dispatched step and should be handled by the caller.
   """
 
   alias Weaver.{Cursor, Ref}

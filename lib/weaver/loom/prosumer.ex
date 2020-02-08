@@ -1,8 +1,8 @@
 defmodule Weaver.Loom.Prosumer do
   @moduledoc """
-  Represents a worker that handles one `Weaver.Step` job at a time.
-  Dispatched jobs are passed to the `GenStage` level below after each call
-  to `Weaver.Step.handle/1`. A job is passed again to `Weaver.Step.handle/1`
+  Represents a worker that handles one `Weaver.Step` at a time.
+  Dispatched steps are passed to the `GenStage` level below after each call
+  to `Weaver.Step.process/1`. A step is passed again to `Weaver.Step.process/1`
   as long as it returns a continuation (`Weaver.Step` with a `:cursor`).
   Otherwise, it sends demand to the `GenStage` level above.
 
@@ -109,7 +109,7 @@ defmodule Weaver.Loom.Prosumer do
     state = %{state | status: :working}
 
     try do
-      {events, retrieval} = Weaver.Step.handle(event)
+      {events, retrieval} = Weaver.Step.process(event)
       noreply(events, %{state | retrieval: retrieval})
     rescue
       e in ExTwitter.RateLimitExceededError ->

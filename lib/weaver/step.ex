@@ -49,46 +49,46 @@ defmodule Weaver.Step do
   alias Weaver.{Cursor, Ref, Resolvers, Step}
 
   @doc """
-  Takes a job (`Weaver.Step`) or a list of jobs to be handled.
+  Takes a step or a list of steps to be processed.
 
   Returns a tuple of
-  - a list of dispatched jobs that should be handled on the
+  - a list of dispatched steps that should be processed on the
   next level of the graph (may be an empty list)
-  - a job to be handled next on the same level of the graph (may be nil)
+  - a step to be processed next on the same level of the graph (may be nil)
   """
-  @spec handle(Step.t() | list(Step.t())) :: {list(Step.t()), Step.t() | nil}
-  def handle(step) do
-    do_handle(step)
+  @spec process(Step.t() | list(Step.t())) :: {list(Step.t()), Step.t() | nil}
+  def process(step) do
+    do_process(step)
   end
 
-  def do_handle(steps, state \\ nil)
+  def do_process(steps, state \\ nil)
 
-  def do_handle(steps, state) when is_list(steps) do
+  def do_process(steps, state) when is_list(steps) do
     Enum.reduce(steps, {[], state}, fn step, {results, state} ->
-      {new_results, state} = do_handle(step, state)
+      {new_results, state} = do_process(step, state)
       {results ++ new_results, state}
     end)
   end
 
-  def do_handle(step = %Step{ast: {:document, ops}}, state) do
+  def do_process(step = %Step{ast: {:document, ops}}, state) do
     continue_with(step, ops, state)
   end
 
-  def do_handle(
+  def do_process(
         step = %Step{ast: {:op, _type, _name, _vars, [], fields, _schema_info}},
         state
       ) do
     continue_with(step, fields, state)
   end
 
-  def do_handle(
+  def do_process(
         step = %Step{ast: {:frag, :..., {:name, _, _type}, [], fields, _schema_info}},
         state
       ) do
     continue_with(step, fields, state)
   end
 
-  def do_handle(
+  def do_process(
         step = %Step{
           ast: {:field, {:name, _, "node"}, [{"id", %{value: id}}], _, fields, _, _schema_info}
         },
@@ -100,14 +100,14 @@ defmodule Weaver.Step do
     |> continue_with(step, fields, state)
   end
 
-  def do_handle(
+  def do_process(
         %Step{ast: {:field, {:name, _, "id"}, [], [], [], :undefined, _schema_info}},
         state
       ) do
     {[], state}
   end
 
-  def do_handle(
+  def do_process(
         %Step{
           ast: {:field, {:name, _, field}, [], [], [], :undefined, _schema_info},
           data: parent_obj
@@ -126,7 +126,7 @@ defmodule Weaver.Step do
     {[], state}
   end
 
-  def do_handle(
+  def do_process(
         step = %Step{
           ast: {:field, {:name, _, field}, [], [], fields, :undefined, _schema_info},
           data: parent_obj
@@ -153,7 +153,7 @@ defmodule Weaver.Step do
     end
   end
 
-  def do_handle(
+  def do_process(
         step = %Step{
           ast: {:retrieve, opts, _fields, _parent_field},
           data: parent_obj,
@@ -174,7 +174,7 @@ defmodule Weaver.Step do
 
         step = %{step | gap: gap}
 
-        do_handle(step, state)
+        do_process(step, state)
 
       step.backfill ->
         Weaver.Graph.cursors!(parent_ref, opts, 3)
@@ -183,7 +183,7 @@ defmodule Weaver.Step do
           {_refresh_end, [gap_start | rest]} ->
             step = %{step | cursor: gap_start, gap: List.first(rest)}
 
-            do_handle(step, state)
+            do_process(step, state)
 
           _else ->
             {[], nil}
@@ -194,7 +194,7 @@ defmodule Weaver.Step do
     end
   end
 
-  def do_handle(
+  def do_process(
         step = %Step{
           ast: {:retrieve, opts, fields, parent_field},
           data: parent_obj
@@ -242,7 +242,7 @@ defmodule Weaver.Step do
     continue_with(objs, step, fields, state)
   end
 
-  def do_handle(step, _state) do
+  def do_process(step, _state) do
     raise "Undhandled step:\n\n#{inspect(Map.from_struct(step), pretty: true)}"
   end
 
@@ -250,14 +250,14 @@ defmodule Weaver.Step do
     for elem <- subtree do
       %{step | ast: elem}
     end
-    |> do_handle(state)
+    |> do_process(state)
   end
 
   defp continue_with(objs, step, subtree, state) when is_list(objs) do
     for obj <- objs, elem <- subtree do
       %{step | data: obj, ast: elem}
     end
-    |> do_handle(state)
+    |> do_process(state)
   end
 
   defp continue_with(obj, step, subtree, state) do

@@ -58,7 +58,7 @@ defmodule Weaver.StepTest do
     step = %Step{ast: ast, fun_env: fun_env}
 
     expect(Twitter, :user, fn "elixirdigest" -> user end)
-    result = Step.handle(step)
+    result = Step.process(step)
     verify!()
 
     assert {[step2], nil} = result
@@ -74,7 +74,7 @@ defmodule Weaver.StepTest do
       Enum.take(favorites, count)
     end)
 
-    result = Step.handle(step2)
+    result = Step.process(step2)
     verify!()
 
     assert {[step3a, step3b], step2_} = result
@@ -92,7 +92,7 @@ defmodule Weaver.StepTest do
       Enum.slice(favorites, 2, count)
     end)
 
-    result = Step.handle(step2_)
+    result = Step.process(step2_)
     verify!()
 
     assert {[step3c, step3d], step2__} = result

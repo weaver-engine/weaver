@@ -1,8 +1,8 @@
 defmodule Weaver.Loom.Consumer do
   @moduledoc """
   Represents a worker at the bottom `GenStage` level.
-  Dispatched jobs are handled recursively via `Weaver.Step.handle/1`.
-  A job is passed again to `Weaver.Step.handle/1` as long as it
+  Dispatched steps are processed recursively via `Weaver.Step.process/1`.
+  A step is passed again to `Weaver.Step.process/1` as long as it
   returns a continuation (`Weaver.Step` with a `:cursor`).
   Otherwise, it sends demand to the `GenStage` level above.
 
@@ -35,12 +35,12 @@ defmodule Weaver.Loom.Consumer do
   end
 
   defp handle_remaining(events, state = %{retrieval: event}) when event != nil do
-    {new_events, state} = Weaver.Step.do_handle(event, state)
+    {new_events, state} = Weaver.Step.do_process(event, state)
     handle_remaining(new_events ++ events, state)
   end
 
   defp handle_remaining([event | events], state) do
-    {new_events, state} = Weaver.Step.do_handle(event, state)
+    {new_events, state} = Weaver.Step.do_process(event, state)
     handle_remaining(new_events ++ events, state)
   end
 

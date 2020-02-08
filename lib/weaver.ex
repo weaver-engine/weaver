@@ -66,7 +66,7 @@ defmodule Weaver do
   end
 
   def weave(step = %Step{}, _opts) do
-    Step.handle(step)
+    Step.process(step)
   end
 
   def parse_query(query) do
