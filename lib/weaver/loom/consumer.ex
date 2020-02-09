@@ -30,21 +30,17 @@ defmodule Weaver.Loom.Consumer do
 
   @impl GenStage
   def handle_events(events, _from, state) do
-    {[], nil} = handle_remaining(events, state)
+    :ok = handle_remaining(events)
     {:noreply, [], state}
   end
 
-  defp handle_remaining(events, state = %{retrieval: event}) when event != nil do
-    {new_events, state} = Weaver.Step.do_process(event, state)
-    handle_remaining(new_events ++ events, state)
+  defp handle_remaining([event | events]) do
+    {data, _meta, dispatched, next} = Weaver.Step.process(event)
+    Weaver.Graph.store!(data)
+    handle_remaining(dispatched ++ List.wrap(next) ++ events)
   end
 
-  defp handle_remaining([event | events], state) do
-    {new_events, state} = Weaver.Step.do_process(event, state)
-    handle_remaining(new_events ++ events, state)
-  end
-
-  defp handle_remaining([], state) do
-    {[], state}
+  defp handle_remaining([]) do
+    :ok
   end
 end
