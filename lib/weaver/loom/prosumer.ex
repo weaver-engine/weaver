@@ -109,8 +109,9 @@ defmodule Weaver.Loom.Prosumer do
     state = %{state | status: :working}
 
     try do
-      {events, retrieval} = Weaver.Step.process(event)
-      noreply(events, %{state | retrieval: retrieval})
+      {data, _meta, dispatched, next} = Weaver.Step.process(event)
+      Weaver.Graph.store!(data)
+      noreply(dispatched, %{state | retrieval: next})
     rescue
       e in ExTwitter.RateLimitExceededError ->
         Process.send_after(self(), :tick, :timer.seconds(e.reset_in))
