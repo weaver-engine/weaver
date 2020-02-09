@@ -128,7 +128,7 @@ defmodule Weaver.Step do
   next level of the graph (may be an empty list)
   - a step to be processed next on the same level of the graph (may be nil)
   """
-  @spec process(Step.t()) :: Result.t()
+  @spec process(Step.t()) :: {list(tuple()), list(tuple()), list(Step.t()), Step.t() | nil}
   def process(step) do
     do_process(step)
   end
