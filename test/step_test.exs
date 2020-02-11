@@ -65,8 +65,11 @@ defmodule Weaver.StepTest do
 
     assert {%Ref{id: "TwitterUser:elixirdigest"}, "favoritesCount", user.favourites_count} in data
 
-    assert %{ast: {:retrieve, :favorites, _ast, "favorites"}, cursor: nil, gap: :not_loaded} =
-             step2
+    assert %{
+             ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
+             cursor: nil,
+             gap: :not_loaded
+           } = step2
 
     assert user == step2.data
 
@@ -94,12 +97,12 @@ defmodule Weaver.StepTest do
     # assert meta2 == [{%Ref{id: "TwitterUser:elixirdigest"}, "favorites", %Cursor{val: 10}}]
 
     assert %{
-             ast: {:retrieve, :favorites, _ast, "favorites"},
+             ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
              cursor: %Cursor{val: 10},
              gap: nil
            } = step2_
 
-    assert {:retrieve, :retweets, _ast, "retweets"} = step3a.ast
+    assert {:dispatched, {:field, {:name, _, "retweets"}, _, _, _, _, _}} = step3a.ast
     assert step3a.data == tweet2b
     assert step3b.data == tweet2a
 
@@ -122,9 +125,12 @@ defmodule Weaver.StepTest do
     assert {%Ref{id: "TwitterUser:elixirdigest"}, "favorites", %Ref{id: "Tweet:#{tweet2d.id}"}} in data2_
     assert {%Ref{id: "Tweet:#{tweet2d.id}"}, "text", tweet2d.full_text} in data2_
 
-    assert %{ast: {:retrieve, :favorites, _ast, "favorites"}, cursor: %Cursor{val: 8}} = step2__
+    assert %{
+             ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
+             cursor: %Cursor{val: 8}
+           } = step2__
 
-    assert {:retrieve, :retweets, _ast, "retweets"} = step3c.ast
+    assert {:dispatched, {:field, {:name, _, "retweets"}, _, _, _, _, _}} = step3c.ast
     assert step3c.data == tweet2d
     assert step3d.data == tweet2c
   end
