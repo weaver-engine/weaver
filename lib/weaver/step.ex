@@ -52,14 +52,14 @@ defmodule Weaver.Step do
     returned as the result of `Weaver.Step.process/1`.
     """
 
+    alias Weaver.{Cursor, Ref, Resolvers, Step}
+
     @type t() :: {
             list(tuple()),
             list(tuple()),
             list(Step.t()),
             Step.t() | nil
           }
-
-    alias Weaver.{Cursor, Ref, Resolvers, Step}
 
     def new() do
       {[], [], [], nil}
