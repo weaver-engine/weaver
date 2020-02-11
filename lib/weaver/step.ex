@@ -52,6 +52,13 @@ defmodule Weaver.Step do
     returned as the result of `Weaver.Step.process/1`.
     """
 
+    @type t() :: {
+            list(tuple()),
+            list(tuple()),
+            list(Step.t()),
+            Step.t() | nil
+          }
+
     alias Weaver.{Cursor, Ref, Resolvers, Step}
 
     def new() do
@@ -133,7 +140,7 @@ defmodule Weaver.Step do
   next level of the graph (may be an empty list)
   - a step to be processed next on the same level of the graph (may be nil)
   """
-  @spec process(Step.t()) :: {list(tuple()), list(tuple()), list(Step.t()), Step.t() | nil}
+  @spec process(Step.t()) :: Result.t()
   def process(step) do
     do_process(step, Result.new())
   end
