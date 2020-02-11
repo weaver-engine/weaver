@@ -48,10 +48,15 @@ defmodule Weaver.Step do
 
   defmodule Result do
     @moduledoc """
-    Functions to modify the 4-element tuple returned as the result of `Weaver.Step.process/1`.
+    Functions to initialize and modify the 4-element tuple
+    returned as the result of `Weaver.Step.process/1`.
     """
 
     alias Weaver.{Cursor, Ref, Resolvers, Step}
+
+    def new() do
+      {[], [], [], nil}
+    end
 
     def add_data({data, meta, dispatched, next}, tuples) when is_list(tuples) do
       {tuples ++ data, meta, dispatched, next}
@@ -130,31 +135,29 @@ defmodule Weaver.Step do
   """
   @spec process(Step.t()) :: {list(tuple()), list(tuple()), list(Step.t()), Step.t() | nil}
   def process(step) do
-    do_process(step)
+    do_process(step, Result.new())
   end
-
-  def do_process(steps, result \\ {[], [], [], nil})
 
   def do_process(steps, result) when is_list(steps) do
     Enum.reduce(steps, result, &do_process/2)
   end
 
   def do_process(step = %Step{ast: {:document, ops}}, result) do
-    continue_with(step, ops, result)
+    continue_with(result, step, ops)
   end
 
   def do_process(
         step = %Step{ast: {:op, _type, _name, _vars, [], fields, _schema_info}},
         result
       ) do
-    continue_with(step, fields, result)
+    continue_with(result, step, fields)
   end
 
   def do_process(
         step = %Step{ast: {:frag, :..., {:name, _, _type}, [], fields, _schema_info}},
         result
       ) do
-    continue_with(step, fields, result)
+    continue_with(result, step, fields)
   end
 
   def do_process(
@@ -166,9 +169,9 @@ defmodule Weaver.Step do
     obj = Resolvers.retrieve_by_id(id)
     ref = Ref.new(id)
 
-    new_step = %{step | data: obj}
-    new_result = Result.add_data(result, {ref, :id, id})
-    continue_with(new_step, fields, new_result)
+    result
+    |> Result.add_data({ref, :id, id})
+    |> continue_with(obj, step, fields)
   end
 
   def do_process(
@@ -222,8 +225,9 @@ defmodule Weaver.Step do
           |> Resolvers.id_for()
           |> Ref.new()
 
-        new_result = Result.add_data(result, {parent_ref, field, obj_ref})
-        continue_with(obj, step, fields, new_result)
+        result
+        |> Result.add_data({parent_ref, field, obj_ref})
+        |> continue_with(obj, step, fields)
     end
   end
 
@@ -311,35 +315,32 @@ defmodule Weaver.Step do
           {objs, nil}
       end
 
-    new_result =
-      result
-      |> Result.add_data(objs, [{parent_ref, parent_field}], step.cursor)
-      |> Result.next(next)
-
-    continue_with(objs, step, fields, new_result)
+    result
+    |> Result.add_data(objs, [{parent_ref, parent_field}], step.cursor)
+    |> Result.next(next)
+    |> continue_with(objs, step, fields)
   end
 
   def do_process(step, _next) do
     raise "Undhandled step:\n\n#{inspect(Map.from_struct(step), pretty: true)}"
   end
 
-  defp continue_with(step, subtree, result) do
+  defp continue_with(result, step, subtree) do
     for elem <- subtree do
       %{step | ast: elem}
     end
     |> do_process(result)
   end
 
-  defp continue_with(objs, step, subtree, result) when is_list(objs) do
+  defp continue_with(result, objs, step, subtree) when is_list(objs) do
     for obj <- objs, elem <- subtree do
       %{step | data: obj, ast: elem}
     end
     |> do_process(result)
   end
 
-  defp continue_with(obj, step, subtree, result) do
-    step
-    |> Map.put(:data, obj)
-    |> continue_with(subtree, result)
+  defp continue_with(result, obj, step, subtree) do
+    new_step = Map.put(step, :data, obj)
+    continue_with(result, new_step, subtree)
   end
 end
