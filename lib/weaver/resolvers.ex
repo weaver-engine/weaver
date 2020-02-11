@@ -2,8 +2,8 @@ defmodule Weaver.Resolvers do
   @moduledoc """
   Weaver-style GraphQL resolvers used in tests.
 
-  Resolvers can return `{:retrieve, object, predicate}` to declare that
-  it takes another API call to resolve this predicate/edge. It will be
+  Resolvers can return `:dispatch` to declare that the resolver should
+  run in another, dispatched, step to resolve this predicate/edge. It will be
   returned as dispatched step and should be handled by the caller.
   """
 
@@ -57,17 +57,9 @@ defmodule Weaver.Resolvers do
     obj.retweet_count
   end
 
-  def resolve_node(obj = %User{}, "favorites") do
-    {:retrieve, obj, :favorites}
-  end
-
-  def resolve_node(obj = %User{}, "tweets") do
-    {:retrieve, obj, :tweets}
-  end
-
-  def resolve_node(obj = %User{}, "retweets") do
-    {:retrieve, obj, :retweets}
-  end
+  def resolve_node(%User{}, "favorites"), do: :dispatch
+  def resolve_node(%User{}, "tweets"), do: :dispatch
+  def resolve_node(%User{}, "retweets"), do: :dispatch
 
   def resolve_node(obj = %Tweet{}, "user") do
     obj.user
@@ -77,21 +69,10 @@ defmodule Weaver.Resolvers do
     obj.retweeted_status
   end
 
-  def resolve_node(obj = %Tweet{}, "likes") do
-    {:retrieve, obj, :likes}
-  end
-
-  def resolve_node(obj = %Tweet{}, "replies") do
-    {:retrieve, obj, :replies}
-  end
-
-  def resolve_node(obj = %Tweet{}, "retweets") do
-    {:retrieve, obj, :retweets}
-  end
-
-  def resolve_node(obj = %Tweet{}, "mentions") do
-    {:retrieve, obj, :mentions}
-  end
+  def resolve_node(%Tweet{}, "likes"), do: :dispatch
+  def resolve_node(%Tweet{}, "replies"), do: :dispatch
+  def resolve_node(%Tweet{}, "retweets"), do: :dispatch
+  def resolve_node(%Tweet{}, "mentions"), do: :dispatch
 
   def total_count(obj = %User{}, "favorites") do
     obj.favourites_count
@@ -107,7 +88,7 @@ defmodule Weaver.Resolvers do
 
   def total_count(_obj, _relation), do: nil
 
-  def retrieve(obj = %User{}, :favorites, cursor) do
+  def dispatched(obj = %User{}, "favorites", cursor) do
     tweets =
       case cursor do
         nil ->
@@ -131,7 +112,7 @@ defmodule Weaver.Resolvers do
     end
   end
 
-  def retrieve(obj = %User{}, :tweets, cursor) do
+  def dispatched(obj = %User{}, "tweets", cursor) do
     tweets =
       case cursor do
         nil ->
@@ -161,7 +142,7 @@ defmodule Weaver.Resolvers do
     end
   end
 
-  def retrieve(obj = %User{}, :retweets, cursor) do
+  def dispatched(obj = %User{}, "retweets", cursor) do
     tweets =
       case cursor do
         nil ->
@@ -194,15 +175,15 @@ defmodule Weaver.Resolvers do
     end
   end
 
-  def retrieve(%Tweet{}, :likes, _cursor) do
+  def dispatched(%Tweet{}, "likes", _cursor) do
     {:done, []}
   end
 
-  def retrieve(%Tweet{}, :replies, _cursor) do
+  def dispatched(%Tweet{}, "replies", _cursor) do
     {:done, []}
   end
 
-  def retrieve(obj = %Tweet{}, :retweets, cursor) do
+  def dispatched(obj = %Tweet{}, "retweets", cursor) do
     tweets =
       case cursor do
         nil ->
@@ -225,7 +206,7 @@ defmodule Weaver.Resolvers do
     end
   end
 
-  def retrieve(obj = %Tweet{}, :mentions, _cursor) do
+  def dispatched(obj = %Tweet{}, "mentions", _cursor) do
     users =
       case obj.entities.user_mentions do
         [] -> []

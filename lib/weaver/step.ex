@@ -205,21 +205,21 @@ defmodule Weaver.Step do
         },
         result
       ) do
-    parent_ref =
-      parent_obj
-      |> Resolvers.id_for()
-      |> Ref.new()
-
     # with total_count = Resolvers.total_count(parent_obj, field),
     #      count = Weaver.Graph.count!(Resolvers.id_for(parent_obj), field),
     #      count == total_count do
     #       Weaver.Graph.stream(Resolvers.id_for(parent_obj), field)
     case Resolvers.resolve_node(parent_obj, field) do
-      {:retrieve, ^parent_obj, opts} ->
-        step = %{step | ast: {:retrieve, opts, fields, field}}
+      :dispatch ->
+        step = %{step | ast: {:dispatched, step.ast}}
         Result.dispatch(result, step)
 
       obj ->
+        parent_ref =
+          parent_obj
+          |> Resolvers.id_for()
+          |> Ref.new()
+
         obj_ref =
           obj
           |> Resolvers.id_for()
@@ -233,7 +233,8 @@ defmodule Weaver.Step do
 
   def do_process(
         step = %Step{
-          ast: {:retrieve, opts, _fields, _parent_field},
+          ast:
+            {:dispatched, {:field, {:name, _, field}, [], [], _fields, :undefined, _schema_info}},
           data: parent_obj,
           gap: :not_loaded
         },
@@ -247,7 +248,7 @@ defmodule Weaver.Step do
     cond do
       step.refresh && !step.refreshed ->
         gap =
-          Weaver.Graph.cursors!(parent_ref, opts, 1)
+          Weaver.Graph.cursors!(parent_ref, field, 1)
           |> List.first()
 
         step = %{step | gap: gap}
@@ -255,7 +256,7 @@ defmodule Weaver.Step do
         do_process(step, result)
 
       step.backfill ->
-        Weaver.Graph.cursors!(parent_ref, opts, 3)
+        Weaver.Graph.cursors!(parent_ref, field, 3)
         |> Enum.split_while(&(!&1.gap))
         |> case do
           {_refresh_end, [gap_start | rest]} ->
@@ -274,7 +275,8 @@ defmodule Weaver.Step do
 
   def do_process(
         step = %Step{
-          ast: {:retrieve, opts, fields, parent_field},
+          ast:
+            {:dispatched, {:field, {:name, _, field}, [], [], fields, :undefined, _schema_info}},
           data: parent_obj
         },
         result
@@ -282,7 +284,7 @@ defmodule Weaver.Step do
     parent_ref = parent_obj |> Resolvers.id_for() |> Ref.new()
 
     {objs, next} =
-      case Resolvers.retrieve(parent_obj, opts, step.cursor) do
+      case Resolvers.dispatched(parent_obj, field, step.cursor) do
         {:continue, objs, cursor} ->
           case step.gap do
             %Cursor{ref: %Ref{id: gap_id}} ->
@@ -316,7 +318,7 @@ defmodule Weaver.Step do
       end
 
     result
-    |> Result.add_data(objs, [{parent_ref, parent_field}], step.cursor)
+    |> Result.add_data(objs, [{parent_ref, field}], step.cursor)
     |> Result.next(next)
     |> continue_with(objs, step, fields)
   end
