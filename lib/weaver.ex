@@ -52,7 +52,7 @@ defmodule Weaver do
     %Step{
       ast: ast,
       fun_env: fun_env,
-      source_graph: Keyword.get(opts, :source_graph),
+      cache: Keyword.get(opts, :cache),
       operation: Keyword.get(opts, :operation, ""),
       variables: Keyword.get(opts, :variables, %{})
     }

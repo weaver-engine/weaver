@@ -5,20 +5,24 @@ defmodule Weaver.Graph do
 
   use GenServer
 
-  alias Weaver.{Cursor, Ref}
+  alias Weaver.{Cursor, Ref, Store}
+
+  @behaviour Store
 
   @timeout :timer.seconds(60)
   @call_timeout :timer.seconds(75)
   @indexes [
-    "id: string @index(hash,trigram) @upsert ."
+    "id: string @index(hash,trigram) @upsert .",
+    "favorites.cursors: [int] ."
   ]
 
   def start_link(_args) do
     GenServer.start_link(__MODULE__, [], name: __MODULE__)
   end
 
-  def store(tuples) do
-    Enum.each(tuples, fn
+  @impl Store
+  def store(data, meta) do
+    Enum.each(data, fn
       {%Ref{}, pred, %Ref{}} when is_binary(pred) or is_atom(pred) ->
         :ok
 
@@ -31,19 +35,30 @@ defmodule Weaver.Graph do
         :ok
 
       other ->
-        raise ArgumentError, "Invalid tuple:\n" <> inspect(other, pretty: true, limit: :infinity)
+        raise ArgumentError,
+              "Invalid data tuple:\n" <> inspect(other, pretty: true, limit: :infinity)
     end)
 
-    GenServer.call(__MODULE__, {:store, tuples}, @call_timeout)
+    Enum.each(meta, fn
+      {%Ref{}, pred, %Cursor{}} when is_binary(pred) or is_atom(pred) ->
+        :ok
+
+      other ->
+        raise ArgumentError,
+              "Invalid meta tuple:\n" <> inspect(other, pretty: true, limit: :infinity)
+    end)
+
+    GenServer.call(__MODULE__, {:store, meta ++ data}, @call_timeout)
   end
 
-  def store!(tuples) do
-    case store(tuples) do
+  def store!(data, meta) do
+    case store(data, meta) do
       {:ok, result} -> result
       {:error, e} -> raise e
     end
   end
 
+  @impl Store
   def cursors(ref, predicate, limit \\ 100) do
     GenServer.call(__MODULE__, {:cursors, ref, predicate, limit}, @call_timeout)
   end
@@ -55,8 +70,9 @@ defmodule Weaver.Graph do
     end
   end
 
-  def count(id, relation) do
-    GenServer.call(__MODULE__, {:count, id, relation}, @call_timeout)
+  @impl Store
+  def count(ref, relation) do
+    GenServer.call(__MODULE__, {:count, ref, relation}, @call_timeout)
   end
 
   def count!(id, relation) do
@@ -66,6 +82,7 @@ defmodule Weaver.Graph do
     end
   end
 
+  @impl Store
   def reset() do
     GenServer.call(__MODULE__, :reset)
   end
@@ -75,6 +92,10 @@ defmodule Weaver.Graph do
       :ok -> :ok
       {:error, e} -> raise e
     end
+  end
+
+  def query(query) do
+    GenServer.call(__MODULE__, {:query, query}, @call_timeout)
   end
 
   @impl GenServer
@@ -87,9 +108,20 @@ defmodule Weaver.Graph do
     varnames = varnames_for(tuples)
     query = upsert_query_for(varnames)
 
-    statement =
+    statements =
       tuples
       |> Enum.map(fn
+        {subject, predicate, %Cursor{val: val, gap: gap, ref: %{id: id}}} ->
+          sub = property(subject, varnames)
+          obj = property(val, varnames)
+
+          facets =
+            %{gap: gap, id: id}
+            |> Enum.map(fn {k, v} -> "#{k} = #{property(v, varnames)}" end)
+            |> Enum.join(", ")
+
+          "#{sub} <#{predicate}.cursors> #{obj} (#{facets}) ."
+
         {subject, predicate, object} ->
           sub = property(subject, varnames)
           obj = property(object, varnames)
@@ -106,10 +138,15 @@ defmodule Weaver.Graph do
 
           facets =
             facets
-            |> Enum.map(fn {k, v} -> "#{k}: #{property(v, varnames)}" end)
+            |> Enum.map(fn {k, v} -> "#{k} = #{property(v, varnames)}" end)
             |> Enum.join(", ")
 
-          "#{sub} <#{predicate}> #{obj} (#{facets})."
+          "#{sub} <#{predicate}> #{obj} (#{facets}) ."
+      end)
+
+    statement =
+      Enum.reduce(varnames, statements, fn {%Ref{id: id}, varname}, statements ->
+        ["uid(#{varname}) <id> #{inspect(id)} ." | statements]
       end)
       |> Enum.join("\n")
 
@@ -118,39 +155,33 @@ defmodule Weaver.Graph do
     {:reply, result, state}
   end
 
-  def handle_call(
-        {:store_retrieval, _initial_cursor, _min_retrieved_id, _max_retrieved_id},
-        _from,
-        state
-      ) do
-    result = :ok
-    {:reply, result, state}
-  end
-
   def handle_call({:cursors, ref, predicate, limit}, _from, state) do
+    cursor_pred = "#{predicate}.cursors"
+
     query = ~s"""
     {
       cursors(func: eq(id, #{inspect(ref.id)})) {
-        #{predicate} @facets(cursor, gap, orderdesc: cursor) {
-          id
-        }
+        #{cursor_pred} @facets(id, gap)
       }
     }
     """
 
     result =
-      case Dlex.query(Dlex, query, %{}, timeout: @timeout) do
-        {:ok, %{"cursors" => cursors}} ->
+      case do_query(query) do
+        {:ok, %{"cursors" => [cursors]}} ->
           cursors =
             cursors
-            |> Enum.map(fn cursor ->
-              Cursor.new(
-                Ref.new(cursor["id"]),
-                cursor["#{predicate}|cursor"],
-                cursor["#{predicate}|gap"]
-              )
+            |> Map.get(cursor_pred)
+            |> Enum.reduce({[], 0}, fn val, {list, i} ->
+              gap = cursors["#{cursor_pred}|gap"][Integer.to_string(i)]
+              id = cursors["#{cursor_pred}|id"][Integer.to_string(i)]
+
+              cursor = Cursor.new(Ref.new(id), val, gap)
+
+              {[cursor | list], i + 1}
             end)
-            |> Enum.sort_by(& &1.val)
+            |> elem(0)
+            |> Enum.sort_by(& &1.val, &>=/2)
             |> Enum.take(limit)
 
           {:ok, cursors}
@@ -162,17 +193,17 @@ defmodule Weaver.Graph do
     {:reply, result, state}
   end
 
-  def handle_call({:count, id, relation}, _from, state) do
-    query = ~s"""
-    {
-      countRelation(func: eq(id, #{inspect(id)})) {
-        c : count(#{relation})
-      }
-    }
-    """
-
+  def handle_call({:count, %Ref{id: id}, relation}, _from, state) do
     result =
-      case Dlex.query(Dlex, query, %{}, timeout: @timeout) do
+      ~s"""
+      {
+        countRelation(func: eq(id, #{inspect(id)})) {
+          c : count(#{relation})
+        }
+      }
+      """
+      |> do_query()
+      |> case do
         {:ok, %{"countRelation" => [%{"c" => count}]}} -> {:ok, count}
         {:ok, %{"countRelation" => []}} -> {:ok, nil}
         {:error, e} -> {:error, e}
@@ -189,6 +220,16 @@ defmodule Weaver.Graph do
       end
 
     {:reply, result, %{}}
+  end
+
+  def handle_call({:query, query}, _from, _uids) do
+    result = do_query(query)
+
+    {:reply, result, %{}}
+  end
+
+  defp do_query(query) do
+    Dlex.query(Dlex, query, %{}, timeout: @timeout)
   end
 
   @doc ~S"""
