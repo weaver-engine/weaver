@@ -109,8 +109,8 @@ defmodule Weaver.Loom.Prosumer do
     state = %{state | status: :working}
 
     try do
-      {data, _meta, dispatched, next} = Weaver.Step.process(event)
-      Weaver.Graph.store!(data)
+      {data, meta, dispatched, next} = Weaver.Step.process(event)
+      Weaver.Graph.store!(data, meta)
       noreply(dispatched, %{state | retrieval: next})
     rescue
       e in ExTwitter.RateLimitExceededError ->

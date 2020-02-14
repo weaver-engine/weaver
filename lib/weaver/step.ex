@@ -15,7 +15,7 @@ defmodule Weaver.Step do
   defstruct @enforce_keys ++
               [
                 :callback,
-                :source_graph,
+                :cache,
                 :data,
                 :uid,
                 :fun_env,
@@ -32,7 +32,7 @@ defmodule Weaver.Step do
   @type t() :: %__MODULE__{
           ast: tuple(),
           callback: function() | nil,
-          source_graph: module() | nil,
+          cache: module() | {module(), Keyword.t()} | nil,
           data: any(),
           uid: any(),
           fun_env: function(),
@@ -86,12 +86,9 @@ defmodule Weaver.Step do
           #     cursor when is_binary(cursor) -> {ref, "weaver.cursor.str", cursor}
           #   end
 
-          relation_tuples =
-            Enum.map(relations, fn {from = %Ref{}, relation} ->
-              {from, relation, ref}
-            end)
-
-          [{ref, :id, id} | relation_tuples]
+          Enum.map(relations, fn {from = %Ref{}, relation} ->
+            {from, relation, ref}
+          end)
         end)
         |> Enum.reverse()
 
@@ -255,7 +252,7 @@ defmodule Weaver.Step do
     cond do
       step.refresh && !step.refreshed ->
         gap =
-          Weaver.Graph.cursors!(parent_ref, field, 1)
+          cursors!(step.cache, parent_ref, field, 1)
           |> List.first()
 
         step = %{step | gap: gap}
@@ -263,7 +260,7 @@ defmodule Weaver.Step do
         do_process(step, result)
 
       step.backfill ->
-        Weaver.Graph.cursors!(parent_ref, field, 3)
+        cursors!(step.cache, parent_ref, field, 3)
         |> Enum.split_while(&(!&1.gap))
         |> case do
           {_refresh_end, [gap_start | rest]} ->
@@ -351,5 +348,15 @@ defmodule Weaver.Step do
   defp continue_with(result, obj, step, subtree) do
     new_step = Map.put(step, :data, obj)
     continue_with(result, new_step, subtree)
+  end
+
+  defp cursors!(nil, _parent_ref, _field, _limit), do: []
+
+  defp cursors!({mod, opts}, parent_ref, field, limit) do
+    mod.cursors!(parent_ref, field, limit, opts)
+  end
+
+  defp cursors!(mod, parent_ref, field, limit) do
+    mod.cursors!(parent_ref, field, limit)
   end
 end

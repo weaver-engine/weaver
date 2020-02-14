@@ -35,8 +35,8 @@ defmodule Weaver.Loom.Consumer do
   end
 
   defp handle_remaining([event | events]) do
-    {data, _meta, dispatched, next} = Weaver.Step.process(event)
-    Weaver.Graph.store!(data)
+    {data, meta, dispatched, next} = Weaver.Step.process(event)
+    Weaver.Graph.store!(data, meta)
     handle_remaining(dispatched ++ List.wrap(next) ++ events)
   end
 

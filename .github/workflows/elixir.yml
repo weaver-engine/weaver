@@ -11,7 +11,7 @@ jobs:
 
     services:
       dgraph:
-        image: dgraph/standalone
+        image: dgraph/standalone:v1.2.1
         ports:
           - 8000:8000
           - 8080:8080
