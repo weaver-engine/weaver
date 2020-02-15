@@ -40,7 +40,10 @@ defmodule Weaver.Graph do
     end)
 
     Enum.each(meta, fn
-      {%Ref{}, pred, %Cursor{}} when is_binary(pred) or is_atom(pred) ->
+      {:add, %Ref{}, pred, %Cursor{}} when is_binary(pred) or is_atom(pred) ->
+        :ok
+
+      {:del, %Ref{}, pred, %Cursor{}} when is_binary(pred) or is_atom(pred) ->
         :ok
 
       other ->
@@ -53,6 +56,7 @@ defmodule Weaver.Graph do
 
   def store!(data, meta) do
     case store(data, meta) do
+      :ok -> :ok
       {:ok, result} -> result
       {:error, e} -> raise e
     end
@@ -105,13 +109,18 @@ defmodule Weaver.Graph do
 
   @impl GenServer
   def handle_call({:store, tuples}, _from, state) do
+    {del_tuples, tuples} = Enum.split_with(tuples, &(elem(&1, 0) == :del))
+
     varnames = varnames_for(tuples)
     query = upsert_query_for(varnames)
 
+    del_varnames = varnames_for(del_tuples)
+    del_query = upsert_query_for(del_varnames)
+
     statements =
       tuples
-      |> Enum.map(fn
-        {subject, predicate, %Cursor{val: val, gap: gap, ref: %{id: id}}} ->
+      |> Enum.flat_map(fn
+        {:add, subject, predicate, %Cursor{val: val, gap: gap, ref: %{id: id}}} ->
           sub = property(subject, varnames)
           obj = property(val, varnames)
 
@@ -120,17 +129,20 @@ defmodule Weaver.Graph do
             |> Enum.map(fn {k, v} -> "#{k} = #{property(v, varnames)}" end)
             |> Enum.join(", ")
 
-          "#{sub} <#{predicate}.cursors> #{obj} (#{facets}) ."
+          ["#{sub} <#{predicate}.cursors> #{obj} (#{facets}) ."]
+
+        {:del, _subject, _predicate, %Cursor{}} ->
+          []
 
         {subject, predicate, object} ->
           sub = property(subject, varnames)
           obj = property(object, varnames)
-          "#{sub} <#{predicate}> #{obj} ."
+          ["#{sub} <#{predicate}> #{obj} ."]
 
         {subject, predicate, object, []} ->
           sub = property(subject, varnames)
           obj = property(object, varnames)
-          "#{sub} <#{predicate}> #{obj} ."
+          ["#{sub} <#{predicate}> #{obj} ."]
 
         {subject, predicate, object, facets} ->
           sub = property(subject, varnames)
@@ -141,7 +153,25 @@ defmodule Weaver.Graph do
             |> Enum.map(fn {k, v} -> "#{k} = #{property(v, varnames)}" end)
             |> Enum.join(", ")
 
-          "#{sub} <#{predicate}> #{obj} (#{facets}) ."
+          ["#{sub} <#{predicate}> #{obj} (#{facets}) ."]
+      end)
+
+    del_statements =
+      del_tuples
+      |> Enum.flat_map(fn
+        {:del, subject, predicate, %Cursor{val: val, gap: gap, ref: %{id: id}}} ->
+          sub = property(subject, del_varnames)
+          obj = property(val, del_varnames)
+
+          facets =
+            %{gap: gap, id: id}
+            |> Enum.map(fn {k, v} -> "#{k} = #{property(v, del_varnames)}" end)
+            |> Enum.join(", ")
+
+          ["#{sub} <#{predicate}.cursors> #{obj} (#{facets}) ."]
+
+        _other ->
+          []
       end)
 
     statement =
@@ -150,7 +180,25 @@ defmodule Weaver.Graph do
       end)
       |> Enum.join("\n")
 
-    result = Dlex.mutate(Dlex, %{query: query}, statement, timeout: @timeout)
+    del_statement =
+      del_statements
+      |> Enum.join("\n")
+
+    result =
+      case {statement, del_statement} do
+        {"", ""} ->
+          :ok
+
+        {"", del_statement} ->
+          {:ok, _} = Dlex.delete(Dlex, del_query, del_statement, timeout: @timeout)
+
+        {statement, ""} ->
+          {:ok, _} = Dlex.mutate(Dlex, %{query: query}, statement, timeout: @timeout)
+
+        {statement, del_statement} ->
+          {:ok, _} = Dlex.mutate(Dlex, %{query: query}, statement, timeout: @timeout)
+          {:ok, _} = Dlex.delete(Dlex, del_query, del_statement, timeout: @timeout)
+      end
 
     {:reply, result, state}
   end
@@ -287,8 +335,9 @@ defmodule Weaver.Graph do
       {sub = %Ref{}, _pred, obj = %Ref{}} -> [sub, obj]
       {sub = %Ref{}, _pred, obj = %Ref{}, _facets} -> [sub, obj]
       {sub = %Ref{}, _pred, _obj} -> [sub]
+      {:add, sub = %Ref{}, _pred, _obj} -> [sub]
+      {:del, sub = %Ref{}, _pred, _obj} -> [sub]
       {sub = %Ref{}, _pred, _obj, _facets} -> [sub]
-      _ -> []
     end)
     |> Enum.reduce(%{}, fn id, map ->
       Map.put_new(map, id, varname(map_size(map)))
