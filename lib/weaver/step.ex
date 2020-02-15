@@ -74,6 +74,12 @@ defmodule Weaver.Step do
     end
 
     def add_data(result, objs, relations \\ [], old_cursor \\ nil, gap_cursor \\ nil)
+
+    def add_data(result, [], _relations, _old_cursor, _gap_cursor) do
+      result
+    end
+
+    def add_data(result, objs, relations, old_cursor, gap_cursor)
         when is_list(objs) do
       [{last_sub, last_pred, last_obj} | tuples] =
         Enum.flat_map(objs, fn obj ->
@@ -114,6 +120,10 @@ defmodule Weaver.Step do
         end
 
       Result.add_data(result, tuples)
+    end
+
+    def add_meta({data, meta, dispatched, next}, tuples) when is_list(tuples) do
+      {data, tuples ++ meta, dispatched, next}
     end
 
     def dispatch({data, meta, dispatched, next}, tuple) do
@@ -269,11 +279,11 @@ defmodule Weaver.Step do
             do_process(step, result)
 
           _else ->
-            {[], nil}
+            Result.new()
         end
 
       true ->
-        {[], nil}
+        Result.new()
     end
   end
 
@@ -286,9 +296,20 @@ defmodule Weaver.Step do
         result
       ) do
     parent_ref = parent_obj |> Resolvers.id_for() |> Ref.new()
+    resolved = Resolvers.dispatched(parent_obj, field, step.cursor)
 
-    {objs, next} =
-      case Resolvers.dispatched(parent_obj, field, step.cursor) do
+    first_meta =
+      if step.cursor do
+        {:del, parent_ref, field, step.cursor}
+      else
+        new_cursor =
+          resolved |> elem(1) |> Enum.take(1) |> Resolvers.cursor() |> Map.put(:gap, false)
+
+        {:add, parent_ref, field, new_cursor}
+      end
+
+    {objs, meta, next} =
+      case resolved do
         {:continue, objs, cursor} ->
           case step.gap do
             %Cursor{ref: %Ref{id: gap_id}} ->
@@ -296,33 +317,71 @@ defmodule Weaver.Step do
               case Enum.split_while(objs, &(Resolvers.id_for(&1) != gap_id)) do
                 {objs, []} ->
                   # gap not closed -> continue with this cursor
+                  cursor = %{cursor | gap: true}
+
+                  meta = [
+                    first_meta,
+                    {:add, parent_ref, field, cursor}
+                  ]
+
                   next = %{step | cursor: cursor, count: step.count + length(objs)}
-                  {objs, next}
+                  {objs, meta, next}
 
                 {objs, _} ->
                   # gap closed
-                  next = %{
-                    step
-                    | gap: :not_loaded,
-                      refreshed: true,
-                      count: step.count + length(objs)
-                  }
+                  if step.gap.gap do
+                    meta = [first_meta]
 
-                  {objs, next}
+                    next = %{
+                      step
+                      | cursor: step.gap,
+                        gap: :not_loaded,
+                        refreshed: true,
+                        count: step.count + length(objs)
+                    }
+
+                    {objs, meta, next}
+                  else
+                    meta = [
+                      first_meta,
+                      {:del, parent_ref, field, step.gap}
+                    ]
+
+                    next = %{
+                      step
+                      | gap: :not_loaded,
+                        refreshed: true,
+                        count: step.count + length(objs)
+                    }
+
+                    {objs, meta, next}
+                  end
               end
 
             _else ->
               # no gap -> continue with this cursor
+              cursor = %{cursor | gap: true}
+
+              meta = [
+                first_meta,
+                {:add, parent_ref, field, cursor}
+              ]
+
               next = %{step | cursor: cursor, count: step.count + length(objs)}
-              {objs, next}
+              {objs, meta, next}
           end
 
         {:done, objs} ->
-          {objs, nil}
+          meta = [
+            first_meta
+          ]
+
+          {objs, meta, nil}
       end
 
     result
     |> Result.add_data(objs, [{parent_ref, field}], step.cursor)
+    |> Result.add_meta(meta)
     |> Result.next(next)
     |> continue_with(objs, step, fields)
   end

@@ -1,24 +1,12 @@
 defmodule Weaver.GraphTest do
-  use ExUnit.Case, async: false
+  use Weaver.IntegrationCase, async: false
 
   doctest Weaver.Graph
-
-  alias Weaver.{Cursor, Ref}
 
   describe "data integrity" do
     import Weaver.Graph, only: [store!: 2, query: 1, cursors: 3]
 
-    setup do
-      {:ok, _pid} = Weaver.Graph.start_link(nil)
-
-      {:ok, _pid} =
-        Application.get_env(:weaver, :dgraph, [])
-        |> Keyword.merge(name: Dlex)
-        |> Dlex.start_link()
-
-      Weaver.Graph.reset!()
-      :ok
-    end
+    setup :use_graph
 
     setup do
       user1 = %Ref{id: "TwitterUser:elixirdigest"}
@@ -31,8 +19,8 @@ defmodule Weaver.GraphTest do
       ]
 
       meta = [
-        {user1, "favorites", %Cursor{val: 140, gap: false, ref: %Ref{id: "Tweet:140"}}},
-        {user1, "favorites", %Cursor{val: 134, gap: true, ref: %Ref{id: "Tweet:134"}}}
+        {:add, user1, "favorites", %Cursor{val: 140, gap: false, ref: %Ref{id: "Tweet:140"}}},
+        {:add, user1, "favorites", %Cursor{val: 134, gap: true, ref: %Ref{id: "Tweet:134"}}}
       ]
 
       store!(data, meta)
@@ -55,6 +43,17 @@ defmodule Weaver.GraphTest do
     test "cursors", %{user1: user1} do
       assert {:ok, [cursor1, cursor2]} = cursors(user1, "favorites", 3)
       assert cursor1 == %Cursor{val: 140, gap: false, ref: %Ref{id: "Tweet:140"}}
+      assert cursor2 == %Cursor{val: 134, gap: true, ref: %Ref{id: "Tweet:134"}}
+    end
+
+    test "delete cursors", %{user1: user1} do
+      assert %{} =
+               store!([], [
+                 {:del, user1, "favorites",
+                  %Cursor{val: 140, gap: false, ref: %Ref{id: "Tweet:140"}}}
+               ])
+
+      assert {:ok, [cursor2]} = cursors(user1, "favorites", 3)
       assert cursor2 == %Cursor{val: 134, gap: true, ref: %Ref{id: "Tweet:134"}}
     end
   end

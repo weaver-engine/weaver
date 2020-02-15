@@ -1,5 +1,5 @@
 defmodule Weaver.LoomTest do
-  use ExUnit.Case, async: false
+  use Weaver.IntegrationCase, async: false
 
   import Test.Support.Factory
   import Mox
@@ -18,18 +18,8 @@ defmodule Weaver.LoomTest do
   }
   """
 
-  setup do
-    Mox.set_mox_global()
-    {:ok, _pid} = Weaver.Graph.start_link(nil)
-
-    {:ok, _pid} =
-      Application.get_env(:weaver, :dgraph, [])
-      |> Keyword.merge(name: Dlex)
-      |> Dlex.start_link()
-
-    Weaver.Graph.reset!()
-    :ok
-  end
+  setup :set_mox_global
+  setup :use_graph
 
   test "weave" do
     user = build(TwitterUser, screen_name: "elixirdigest")
