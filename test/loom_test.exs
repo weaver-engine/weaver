@@ -1,7 +1,6 @@
 defmodule Weaver.LoomTest do
   use Weaver.IntegrationCase, async: false
 
-  import Test.Support.Factory
   import Mox
 
   alias Weaver.ExTwitter.Mock, as: Twitter

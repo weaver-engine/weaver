@@ -1,9 +1,6 @@
 defmodule WeaverTest do
   use Weaver.IntegrationCase, async: false
 
-  import Test.Support.Factory
-  import Mox
-
   alias Weaver.ExTwitter.Mock, as: Twitter
 
   describe "prepare" do
@@ -56,97 +53,89 @@ defmodule WeaverTest do
     end
 
     test "works", %{user: user, favorites: favorites} do
-      step = Weaver.prepare(@query)
+      [fav11, fav10, fav9, fav8 | _] = favorites
 
-      expect(Twitter, :user, fn "elixirdigest" -> user end)
-      result = Weaver.weave(step)
-      verify!()
+      @query
+      |> Weaver.prepare()
 
-      assert {data, [], [dispatched], nil} = result
-      assert {%Ref{id: "TwitterUser:elixirdigest"}, "screenName", "elixirdigest"} in data
-
-      assert {%Ref{id: "TwitterUser:elixirdigest"}, "favoritesCount", user.favourites_count} in data
-
-      assert %{
-               ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
-               cursor: nil,
-               gap: :not_loaded
-             } = dispatched
-
-      assert user == dispatched.data
+      # user
+      |> weave_initial(Twitter, :user, fn "elixirdigest" -> user end)
+      |> assert_has_data([
+        {%Ref{id: "TwitterUser:elixirdigest"}, "screenName", "elixirdigest"},
+        {%Ref{id: "TwitterUser:elixirdigest"}, "favoritesCount", user.favourites_count}
+      ])
+      |> assert_meta([])
+      |> assert_dispatched([
+        %{
+          ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
+          cursor: nil,
+          gap: :not_loaded,
+          data: ^user
+        }
+      ])
+      |> refute_next()
 
       # favorites initial
-      expect(Twitter, :favorites, fn [id: user_id, tweet_mode: :extended, count: count] ->
+      |> weave_dispatched(Twitter, :favorites, fn [
+                                                    id: user_id,
+                                                    tweet_mode: :extended,
+                                                    count: count
+                                                  ] ->
         assert user_id == user.id
         Enum.take(favorites, count)
       end)
-
-      result = Weaver.weave(dispatched)
-      verify!()
-
-      assert {data, meta, dispatched, next} = result
-
-      assert [dispatched1, dispatched2] = dispatched
-
-      [tweet1, tweet2] = Enum.slice(favorites, 0..1)
-
-      assert {%Ref{id: "TwitterUser:elixirdigest"}, "favorites", %Ref{id: "Tweet:#{tweet1.id}"}} in data
-      assert {%Ref{id: "Tweet:#{tweet1.id}"}, "text", tweet1.full_text} in data
-
-      assert {%Ref{id: "TwitterUser:elixirdigest"}, "favorites", %Ref{id: "Tweet:#{tweet2.id}"}} in data
-      assert {%Ref{id: "Tweet:#{tweet2.id}"}, "text", tweet2.full_text} in data
-
-      assert meta == [
-               {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-                %Cursor{val: 11, gap: false, ref: %Ref{id: "Tweet:11"}}},
-               {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-                %Cursor{val: 10, gap: true, ref: %Ref{id: "Tweet:10"}}}
-             ]
-
-      assert %{
-               ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
-               cursor: %Cursor{val: 10},
-               gap: nil
-             } = next
-
-      assert {:dispatched, {:field, {:name, _, "retweets"}, _, _, _, _, _}} = dispatched1.ast
-      assert dispatched1.data == tweet2
-      assert dispatched2.data == tweet1
+      |> assert_has_data([
+        {%Ref{id: "TwitterUser:elixirdigest"}, "favorites", %Ref{id: "Tweet:#{fav11.id}"}},
+        {%Ref{id: "Tweet:#{fav11.id}"}, "text", fav11.full_text},
+        {%Ref{id: "TwitterUser:elixirdigest"}, "favorites", %Ref{id: "Tweet:#{fav10.id}"}},
+        {%Ref{id: "Tweet:#{fav10.id}"}, "text", fav10.full_text}
+      ])
+      |> assert_meta([
+        {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         %Cursor{val: 11, gap: false, ref: %Ref{id: "Tweet:11"}}},
+        {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         %Cursor{val: 10, gap: true, ref: %Ref{id: "Tweet:10"}}}
+      ])
+      |> assert_next(%{
+        ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
+        cursor: %Cursor{val: 10},
+        gap: nil
+      })
+      |> assert_dispatched([
+        %{data: ^fav10, ast: {:dispatched, {:field, {:name, _, "retweets"}, _, _, _, _, _}}},
+        %{data: ^fav11, ast: {:dispatched, {:field, {:name, _, "retweets"}, _, _, _, _, _}}}
+      ])
 
       # favorites pt. 2
-      expect(Twitter, :favorites, fn [id: user_id, tweet_mode: :extended, count: count, max_id: 9] ->
+      |> weave_next(Twitter, :favorites, fn [
+                                              id: user_id,
+                                              tweet_mode: :extended,
+                                              count: count,
+                                              max_id: 9
+                                            ] ->
         assert user_id == user.id
         Enum.slice(favorites, 2, count)
       end)
-
-      result = Weaver.weave(next)
-      verify!()
-
-      assert {data, meta, [dispatched1, dispatched2], next} = result
-
-      [tweet1, tweet2] = Enum.slice(favorites, 2..3)
-
-      assert {%Ref{id: "TwitterUser:elixirdigest"}, "favorites", %Ref{id: "Tweet:#{tweet1.id}"}} in data
-      assert {%Ref{id: "Tweet:#{tweet1.id}"}, "text", tweet1.full_text} in data
-
-      assert {%Ref{id: "TwitterUser:elixirdigest"}, "favorites", %Ref{id: "Tweet:#{tweet2.id}"}} in data
-      assert {%Ref{id: "Tweet:#{tweet2.id}"}, "text", tweet2.full_text} in data
-
-      assert meta == [
-               {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-                %Cursor{val: 10, gap: true, ref: %Ref{id: "Tweet:10"}}},
-               {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-                %Cursor{val: 8, gap: true, ref: %Ref{id: "Tweet:8"}}}
-             ]
-
-      assert %{
-               ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
-               cursor: %Cursor{val: 8}
-             } = next
-
-      assert {:dispatched, {:field, {:name, _, "retweets"}, _, _, _, _, _}} = dispatched1.ast
-      assert dispatched1.data == tweet2
-      assert dispatched2.data == tweet1
+      |> assert_has_data([
+        {%Ref{id: "TwitterUser:elixirdigest"}, "favorites", %Ref{id: "Tweet:#{fav9.id}"}},
+        {%Ref{id: "Tweet:#{fav9.id}"}, "text", fav9.full_text},
+        {%Ref{id: "TwitterUser:elixirdigest"}, "favorites", %Ref{id: "Tweet:#{fav8.id}"}},
+        {%Ref{id: "Tweet:#{fav8.id}"}, "text", fav8.full_text}
+      ])
+      |> assert_meta([
+        {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         %Cursor{val: 10, gap: true, ref: %Ref{id: "Tweet:10"}}},
+        {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         %Cursor{val: 8, gap: true, ref: %Ref{id: "Tweet:8"}}}
+      ])
+      |> assert_next(%{
+        ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
+        cursor: %Cursor{val: 8}
+      })
+      |> assert_dispatched([
+        %{data: ^fav8, ast: {:dispatched, {:field, {:name, _, "retweets"}, _, _, _, _, _}}},
+        %{data: ^fav9, ast: {:dispatched, {:field, {:name, _, "retweets"}, _, _, _, _, _}}}
+      ])
     end
   end
 
@@ -205,220 +194,170 @@ defmodule WeaverTest do
     end
 
     test "works", %{user: user, favorites: favorites} do
-      step = Weaver.prepare(@query, cache: Weaver.Graph)
+      [fav21, _, _, _, _, _, fav15, fav14, fav13, _, fav11 | _] = favorites
 
-      expect(Twitter, :user, fn "elixirdigest" -> user end)
-      result = Weaver.weave(step)
-      verify!()
-
-      assert {data, [], [dispatched], nil} = result
-      assert {%Ref{id: "TwitterUser:elixirdigest"}, "screenName", "elixirdigest"} in data
-
-      assert {%Ref{id: "TwitterUser:elixirdigest"}, "favoritesCount", user.favourites_count} in data
-
-      assert %{
-               ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
-               cursor: nil,
-               gap: :not_loaded
-             } = dispatched
-
-      assert user == dispatched.data
-
-      assert Weaver.Graph.store!(data, [])
+      @query
+      |> Weaver.prepare(cache: Weaver.Graph)
+      |> weave_initial(Twitter, :user, fn "elixirdigest" -> user end)
+      |> assert_has_data([
+        {%Ref{id: "TwitterUser:elixirdigest"}, "screenName", "elixirdigest"},
+        {%Ref{id: "TwitterUser:elixirdigest"}, "favoritesCount", user.favourites_count}
+      ])
+      |> assert_meta([])
+      |> assert_dispatched([
+        %{
+          ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
+          cursor: nil,
+          gap: :not_loaded,
+          data: ^user
+        }
+      ])
 
       # favorites initial
-      expect(Twitter, :favorites, fn [id: user_id, tweet_mode: :extended, count: count] ->
+      |> weave_dispatched(Twitter, :favorites, fn [
+                                                    id: user_id,
+                                                    tweet_mode: :extended,
+                                                    count: count
+                                                  ] ->
         assert user_id == user.id
         Enum.take(favorites, count)
       end)
-
-      result = Weaver.weave(dispatched)
-      verify!()
-
-      assert {data, meta, dispatched, next} = result
-
-      assert [dispatched1] = dispatched
-
-      [tweet1] = Enum.slice(favorites, 0..0)
-
-      assert {%Ref{id: "TwitterUser:elixirdigest"}, "favorites", %Ref{id: "Tweet:#{tweet1.id}"}} in data
-      assert {%Ref{id: "Tweet:#{tweet1.id}"}, "text", tweet1.full_text} in data
-
-      assert meta == [
-               {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-                %Cursor{val: 21, gap: false, ref: %Ref{id: "Tweet:21"}}},
-               {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-                %Cursor{val: 20, gap: false, ref: %Ref{id: "Tweet:20"}}}
-             ]
-
-      assert %{
-               ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
-               cursor: nil,
-               gap: :not_loaded
-             } = next
-
-      assert {:dispatched, {:field, {:name, _, "retweets"}, _, _, _, _, _}} = dispatched1.ast
-      assert dispatched1.data == tweet1
-
-      assert Weaver.Graph.store!(data, meta)
+      |> assert_has_data([
+        {%Ref{id: "TwitterUser:elixirdigest"}, "favorites", %Ref{id: "Tweet:#{fav21.id}"}},
+        {%Ref{id: "Tweet:#{fav21.id}"}, "text", fav21.full_text}
+      ])
+      |> assert_meta([
+        {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         %Cursor{val: 21, gap: false, ref: %Ref{id: "Tweet:21"}}},
+        {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         %Cursor{val: 20, gap: false, ref: %Ref{id: "Tweet:20"}}}
+      ])
+      |> assert_dispatched([
+        %{data: ^fav21, ast: {:dispatched, {:field, {:name, _, "retweets"}, _, _, _, _, _}}}
+      ])
+      |> assert_next(%{
+        ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
+        cursor: nil,
+        gap: :not_loaded
+      })
 
       # favorites pt. 2
-      expect(Twitter, :favorites, fn [
-                                       id: user_id,
-                                       tweet_mode: :extended,
-                                       count: count,
-                                       max_id: 15
-                                     ] ->
+      |> weave_next(Twitter, :favorites, fn [
+                                              id: user_id,
+                                              tweet_mode: :extended,
+                                              count: count,
+                                              max_id: 15
+                                            ] ->
         assert user_id == user.id
         start_index = 21 - 15
         Enum.slice(favorites, start_index, count)
       end)
-
-      result = Weaver.weave(next)
-      verify!()
-
-      assert {data, meta, [dispatched1, dispatched2], next} = result
-
-      [tweet1, tweet2] = Enum.slice(favorites, 21 - 15, 2)
-
-      assert {%Ref{id: "TwitterUser:elixirdigest"}, "favorites", %Ref{id: "Tweet:#{tweet1.id}"}} in data
-      assert {%Ref{id: "Tweet:#{tweet1.id}"}, "text", tweet1.full_text} in data
-
-      assert {%Ref{id: "TwitterUser:elixirdigest"}, "favorites", %Ref{id: "Tweet:#{tweet2.id}"}} in data
-      assert {%Ref{id: "Tweet:#{tweet2.id}"}, "text", tweet2.full_text} in data
-
-      assert meta == [
-               {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-                %Cursor{val: 16, gap: true, ref: %Ref{id: "Tweet:16"}}},
-               {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-                %Cursor{val: 14, gap: true, ref: %Ref{id: "Tweet:14"}}}
-             ]
-
-      assert %{
-               ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
-               cursor: %Cursor{val: 14}
-             } = next
-
-      assert {:dispatched, {:field, {:name, _, "retweets"}, _, _, _, _, _}} = dispatched1.ast
-      assert dispatched1.data == tweet2
-      assert dispatched2.data == tweet1
-
-      assert Weaver.Graph.store!(data, meta)
+      |> assert_has_data([
+        {%Ref{id: "TwitterUser:elixirdigest"}, "favorites", %Ref{id: "Tweet:#{fav15.id}"}},
+        {%Ref{id: "Tweet:#{fav15.id}"}, "text", fav15.full_text},
+        {%Ref{id: "TwitterUser:elixirdigest"}, "favorites", %Ref{id: "Tweet:#{fav14.id}"}},
+        {%Ref{id: "Tweet:#{fav14.id}"}, "text", fav14.full_text}
+      ])
+      |> assert_meta([
+        {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         %Cursor{val: 16, gap: true, ref: %Ref{id: "Tweet:16"}}},
+        {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         %Cursor{val: 14, gap: true, ref: %Ref{id: "Tweet:14"}}}
+      ])
+      |> assert_next(%{
+        ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
+        cursor: %Cursor{val: 14}
+      })
+      |> assert_dispatched([
+        %{data: ^fav14, ast: {:dispatched, {:field, {:name, _, "retweets"}, _, _, _, _, _}}},
+        %{data: ^fav15, ast: {:dispatched, {:field, {:name, _, "retweets"}, _, _, _, _, _}}}
+      ])
 
       # favorites pt. 3
-      expect(Twitter, :favorites, fn [
-                                       id: user_id,
-                                       tweet_mode: :extended,
-                                       count: count,
-                                       max_id: 13
-                                     ] ->
+      |> weave_next(Twitter, :favorites, fn [
+                                              id: user_id,
+                                              tweet_mode: :extended,
+                                              count: count,
+                                              max_id: 13
+                                            ] ->
         assert user_id == user.id
         start_index = 21 - 13
         Enum.slice(favorites, start_index, count)
       end)
-
-      result = Weaver.weave(next)
-      verify!()
-
-      assert {data, meta, [dispatched1], next} = result
-
-      [tweet1] = Enum.slice(favorites, 21 - 13, 1)
-
-      assert {%Ref{id: "TwitterUser:elixirdigest"}, "favorites", %Ref{id: "Tweet:#{tweet1.id}"}} in data
-      assert {%Ref{id: "Tweet:#{tweet1.id}"}, "text", tweet1.full_text} in data
-
-      assert meta == [
-               {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-                %Cursor{val: 14, gap: true, ref: %Ref{id: "Tweet:14"}}}
-             ]
-
-      assert %{
-               ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
-               cursor: %Cursor{val: 12}
-             } = next
-
-      assert {:dispatched, {:field, {:name, _, "retweets"}, _, _, _, _, _}} = dispatched1.ast
-      assert dispatched1.data == tweet1
-
-      assert Weaver.Graph.store!(data, meta)
+      |> assert_has_data([
+        {%Ref{id: "TwitterUser:elixirdigest"}, "favorites", %Ref{id: "Tweet:#{fav13.id}"}},
+        {%Ref{id: "Tweet:#{fav13.id}"}, "text", fav13.full_text}
+      ])
+      |> assert_meta([
+        {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         %Cursor{val: 14, gap: true, ref: %Ref{id: "Tweet:14"}}}
+      ])
+      |> assert_next(%{
+        ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
+        cursor: %Cursor{val: 12}
+      })
+      |> assert_dispatched([
+        %{data: ^fav13, ast: {:dispatched, {:field, {:name, _, "retweets"}, _, _, _, _, _}}}
+      ])
 
       # favorites pt. 4
-      expect(Twitter, :favorites, fn [
-                                       id: user_id,
-                                       tweet_mode: :extended,
-                                       count: count,
-                                       max_id: 11
-                                     ] ->
+      |> weave_next(Twitter, :favorites, fn [
+                                              id: user_id,
+                                              tweet_mode: :extended,
+                                              count: count,
+                                              max_id: 11
+                                            ] ->
         assert user_id == user.id
         start_index = 21 - 11
         Enum.slice(favorites, start_index, count)
       end)
-
-      result = Weaver.weave(next)
-      verify!()
-
-      assert {data, meta, [dispatched1], next} = result
-
-      [tweet1] = Enum.slice(favorites, 21 - 11, 1)
-
-      assert {%Ref{id: "TwitterUser:elixirdigest"}, "favorites", %Ref{id: "Tweet:#{tweet1.id}"}} in data
-      assert {%Ref{id: "Tweet:#{tweet1.id}"}, "text", tweet1.full_text} in data
-
-      assert meta == [
-               {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-                %Cursor{val: 12, gap: true, ref: %Ref{id: "Tweet:12"}}},
-               {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-                %Cursor{val: 10, gap: false, ref: %Ref{id: "Tweet:10"}}}
-             ]
-
-      assert %{
-               ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
-               cursor: %Cursor{val: 12},
-               gap: :not_loaded
-             } = next
-
-      assert {:dispatched, {:field, {:name, _, "retweets"}, _, _, _, _, _}} = dispatched1.ast
-      assert dispatched1.data == tweet1
-
-      assert Weaver.Graph.store!(data, meta)
+      |> assert_has_data([
+        {%Ref{id: "TwitterUser:elixirdigest"}, "favorites", %Ref{id: "Tweet:#{fav11.id}"}},
+        {%Ref{id: "Tweet:#{fav11.id}"}, "text", fav11.full_text}
+      ])
+      |> assert_meta([
+        {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         %Cursor{val: 12, gap: true, ref: %Ref{id: "Tweet:12"}}},
+        {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         %Cursor{val: 10, gap: false, ref: %Ref{id: "Tweet:10"}}}
+      ])
+      |> assert_next(%{
+        ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
+        cursor: %Cursor{val: 12},
+        gap: :not_loaded
+      })
+      |> assert_dispatched([
+        %{data: ^fav11, ast: {:dispatched, {:field, {:name, _, "retweets"}, _, _, _, _, _}}}
+      ])
 
       # favorites pt. 5
-      expect(Twitter, :favorites, fn [
-                                       id: user_id,
-                                       tweet_mode: :extended,
-                                       count: count,
-                                       max_id: 7
-                                     ] ->
+      |> weave_next(Twitter, :favorites, fn [
+                                              id: user_id,
+                                              tweet_mode: :extended,
+                                              count: count,
+                                              max_id: 7
+                                            ] ->
         assert user_id == user.id
         start_index = 21 - 7
         Enum.slice(favorites, start_index, count)
       end)
-
-      result = Weaver.weave(next)
-      verify!()
-
-      assert {[], meta, [], next} = result
-
-      assert meta == [
-               {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-                %Cursor{val: 8, gap: true, ref: %Ref{id: "Tweet:8"}}},
-               {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-                %Cursor{val: 7, gap: false, ref: %Ref{id: "Tweet:7"}}}
-             ]
-
-      assert %{
-               ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
-               cursor: %Cursor{val: 8},
-               gap: :not_loaded
-             } = next
-
-      assert Weaver.Graph.store!(data, meta)
+      |> assert_data([])
+      |> assert_dispatched([])
+      |> assert_meta([
+        {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         %Cursor{val: 8, gap: true, ref: %Ref{id: "Tweet:8"}}},
+        {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         %Cursor{val: 7, gap: false, ref: %Ref{id: "Tweet:7"}}}
+      ])
+      |> assert_next(%{
+        ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
+        cursor: %Cursor{val: 8},
+        gap: :not_loaded
+      })
 
       # favorites pt. 6
-      result = Weaver.weave(next)
-      verify!()
-
-      assert {[], [], [], nil} = result
+      |> weave_next()
+      |> assert_done()
     end
   end
 end
