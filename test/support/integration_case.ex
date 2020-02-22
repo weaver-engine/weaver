@@ -15,7 +15,7 @@ defmodule Weaver.IntegrationCase do
   use ExUnit.CaseTemplate
 
   using do
-    quote do
+    quote location: :keep do
       alias Weaver.{Cursor, Ref}
 
       import Weaver.IntegrationCase

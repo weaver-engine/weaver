@@ -70,62 +70,22 @@ defmodule Weaver.Step do
     def dispatched({_, _, dispatched, _}), do: dispatched
     def next({_, _, _, next}), do: next
 
-    def add_data({data, meta, dispatched, next}, tuples) when is_list(tuples) do
-      {tuples ++ data, meta, dispatched, next}
-    end
-
     def add_data({data, meta, dispatched, next}, tuple) do
       {[tuple | data], meta, dispatched, next}
     end
 
-    def add_data(result, objs, relations \\ [], old_cursor \\ nil, gap_cursor \\ nil)
+    def add_relation_data(result, {from = %Ref{}, predicate, [obj | objs]}) do
+      obj_ref =
+        obj
+        |> Resolvers.id_for()
+        |> Ref.new()
 
-    def add_data(result, [], _relations, _old_cursor, _gap_cursor) do
       result
+      |> add_data({from, predicate, obj_ref})
+      |> add_relation_data({from, predicate, objs})
     end
 
-    def add_data(result, objs, relations, old_cursor, gap_cursor)
-        when is_list(objs) do
-      [{last_sub, last_pred, last_obj} | tuples] =
-        Enum.flat_map(objs, fn obj ->
-          id = Resolvers.id_for(obj)
-          ref = Ref.new(id)
-
-          # cursor_tuple =
-          #   case Resolvers.cursor(obj) do
-          #     cursor when is_integer(cursor) -> {ref, "weaver.cursor.int", cursor}
-          #     cursor when is_binary(cursor) -> {ref, "weaver.cursor.str", cursor}
-          #   end
-
-          Enum.map(relations, fn {from = %Ref{}, relation} ->
-            {from, relation, ref}
-          end)
-        end)
-        |> Enum.reverse()
-
-      tuples =
-        if gap_cursor do
-          cursor = Resolvers.cursor(last_obj)
-          [{last_sub, last_pred, last_obj, cursor: cursor.val, gap: true} | tuples]
-        else
-          [{last_sub, last_pred, last_obj} | tuples]
-        end
-        |> Enum.reverse()
-
-      tuples =
-        if old_cursor do
-          relation_tuples =
-            Enum.map(relations, fn {from = %Ref{}, relation} ->
-              {from, relation, old_cursor.ref, []}
-            end)
-
-          relation_tuples ++ tuples
-        else
-          tuples
-        end
-
-      Result.add_data(result, tuples)
-    end
+    def add_relation_data(result, {%Ref{}, _predicate, []}), do: result
 
     def add_meta({data, meta, dispatched, next}, tuples) when is_list(tuples) do
       {data, tuples ++ meta, dispatched, next}
@@ -214,7 +174,8 @@ defmodule Weaver.Step do
       |> Resolvers.id_for()
       |> Ref.new()
 
-    Result.add_data(result, {parent_ref, field, value})
+    result
+    |> Result.add_data({parent_ref, field, value})
   end
 
   def do_process(
@@ -385,7 +346,7 @@ defmodule Weaver.Step do
       end
 
     result
-    |> Result.add_data(objs, [{parent_ref, field}], step.cursor)
+    |> Result.add_relation_data({parent_ref, field, objs})
     |> Result.add_meta(meta)
     |> Result.next(next)
     |> continue_with(objs, step, fields)
