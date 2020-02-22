@@ -3,6 +3,21 @@ defmodule WeaverTest do
 
   alias Weaver.ExTwitter.Mock, as: Twitter
 
+  def twitter_mock_for(user, tweets) do
+    fn [id: user_id, tweet_mode: :extended, count: count] ->
+      assert user_id == user.id
+      Enum.take(tweets, count)
+    end
+  end
+
+  def twitter_mock_for(user, tweets, max_id: max_id) do
+    fn [id: user_id, tweet_mode: :extended, count: count, max_id: ^max_id] ->
+      assert user_id == user.id
+      {_skipped, tweets} = Enum.split_while(tweets, &(&1.id > max_id))
+      Enum.take(tweets, count)
+    end
+  end
+
   describe "prepare" do
     @query """
     query {
@@ -76,14 +91,7 @@ defmodule WeaverTest do
       |> refute_next()
 
       # favorites initial
-      |> weave_dispatched(Twitter, :favorites, fn [
-                                                    id: user_id,
-                                                    tweet_mode: :extended,
-                                                    count: count
-                                                  ] ->
-        assert user_id == user.id
-        Enum.take(favorites, count)
-      end)
+      |> weave_dispatched(Twitter, :favorites, twitter_mock_for(user, favorites))
       |> assert_has_data([
         {%Ref{id: "TwitterUser:elixirdigest"}, "favorites", %Ref{id: "Tweet:#{fav11.id}"}},
         {%Ref{id: "Tweet:#{fav11.id}"}, "text", fav11.full_text},
@@ -107,15 +115,7 @@ defmodule WeaverTest do
       ])
 
       # favorites pt. 2
-      |> weave_next(Twitter, :favorites, fn [
-                                              id: user_id,
-                                              tweet_mode: :extended,
-                                              count: count,
-                                              max_id: 9
-                                            ] ->
-        assert user_id == user.id
-        Enum.slice(favorites, 2, count)
-      end)
+      |> weave_next(Twitter, :favorites, twitter_mock_for(user, favorites, max_id: 9))
       |> assert_has_data([
         {%Ref{id: "TwitterUser:elixirdigest"}, "favorites", %Ref{id: "Tweet:#{fav9.id}"}},
         {%Ref{id: "Tweet:#{fav9.id}"}, "text", fav9.full_text},
@@ -214,14 +214,7 @@ defmodule WeaverTest do
       ])
 
       # favorites initial
-      |> weave_dispatched(Twitter, :favorites, fn [
-                                                    id: user_id,
-                                                    tweet_mode: :extended,
-                                                    count: count
-                                                  ] ->
-        assert user_id == user.id
-        Enum.take(favorites, count)
-      end)
+      |> weave_dispatched(Twitter, :favorites, twitter_mock_for(user, favorites))
       |> assert_has_data([
         {%Ref{id: "TwitterUser:elixirdigest"}, "favorites", %Ref{id: "Tweet:#{fav21.id}"}},
         {%Ref{id: "Tweet:#{fav21.id}"}, "text", fav21.full_text}
@@ -242,16 +235,7 @@ defmodule WeaverTest do
       })
 
       # favorites pt. 2
-      |> weave_next(Twitter, :favorites, fn [
-                                              id: user_id,
-                                              tweet_mode: :extended,
-                                              count: count,
-                                              max_id: 15
-                                            ] ->
-        assert user_id == user.id
-        start_index = 21 - 15
-        Enum.slice(favorites, start_index, count)
-      end)
+      |> weave_next(Twitter, :favorites, twitter_mock_for(user, favorites, max_id: 15))
       |> assert_has_data([
         {%Ref{id: "TwitterUser:elixirdigest"}, "favorites", %Ref{id: "Tweet:#{fav15.id}"}},
         {%Ref{id: "Tweet:#{fav15.id}"}, "text", fav15.full_text},
@@ -274,16 +258,7 @@ defmodule WeaverTest do
       ])
 
       # favorites pt. 3
-      |> weave_next(Twitter, :favorites, fn [
-                                              id: user_id,
-                                              tweet_mode: :extended,
-                                              count: count,
-                                              max_id: 13
-                                            ] ->
-        assert user_id == user.id
-        start_index = 21 - 13
-        Enum.slice(favorites, start_index, count)
-      end)
+      |> weave_next(Twitter, :favorites, twitter_mock_for(user, favorites, max_id: 13))
       |> assert_has_data([
         {%Ref{id: "TwitterUser:elixirdigest"}, "favorites", %Ref{id: "Tweet:#{fav13.id}"}},
         {%Ref{id: "Tweet:#{fav13.id}"}, "text", fav13.full_text}
@@ -301,16 +276,7 @@ defmodule WeaverTest do
       ])
 
       # favorites pt. 4
-      |> weave_next(Twitter, :favorites, fn [
-                                              id: user_id,
-                                              tweet_mode: :extended,
-                                              count: count,
-                                              max_id: 11
-                                            ] ->
-        assert user_id == user.id
-        start_index = 21 - 11
-        Enum.slice(favorites, start_index, count)
-      end)
+      |> weave_next(Twitter, :favorites, twitter_mock_for(user, favorites, max_id: 11))
       |> assert_has_data([
         {%Ref{id: "TwitterUser:elixirdigest"}, "favorites", %Ref{id: "Tweet:#{fav11.id}"}},
         {%Ref{id: "Tweet:#{fav11.id}"}, "text", fav11.full_text}
@@ -331,16 +297,7 @@ defmodule WeaverTest do
       ])
 
       # favorites pt. 5
-      |> weave_next(Twitter, :favorites, fn [
-                                              id: user_id,
-                                              tweet_mode: :extended,
-                                              count: count,
-                                              max_id: 7
-                                            ] ->
-        assert user_id == user.id
-        start_index = 21 - 7
-        Enum.slice(favorites, start_index, count)
-      end)
+      |> weave_next(Twitter, :favorites, twitter_mock_for(user, favorites, max_id: 7))
       |> assert_data([])
       |> assert_dispatched([])
       |> assert_meta([
