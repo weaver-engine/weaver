@@ -65,6 +65,11 @@ defmodule Weaver.Step do
       {[], [], [], nil}
     end
 
+    def data({data, _, _, _}), do: data
+    def meta({_, meta, _, _}), do: meta
+    def dispatched({_, _, dispatched, _}), do: dispatched
+    def next({_, _, _, next}), do: next
+
     def add_data({data, meta, dispatched, next}, tuples) when is_list(tuples) do
       {tuples ++ data, meta, dispatched, next}
     end
