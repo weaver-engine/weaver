@@ -22,6 +22,7 @@ defmodule Weaver do
           }
 
     def new(id), do: %__MODULE__{id: id}
+    def from(obj), do: new(Weaver.Resolvers.id_for(obj))
   end
 
   defmodule Cursor do

@@ -145,7 +145,7 @@ defmodule Weaver.IntegrationCase do
   defmacro assert_done(result_expr) do
     quote do
       result = unquote(result_expr)
-      assert result == Result.new()
+      assert result == Result.empty()
 
       result
     end
