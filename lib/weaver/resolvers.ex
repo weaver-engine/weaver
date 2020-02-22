@@ -21,16 +21,20 @@ defmodule Weaver.Resolvers do
   def id_for(obj = %User{}), do: "TwitterUser:#{obj.screen_name}"
   def id_for(obj = %Tweet{}), do: "Tweet:#{obj.id_str}"
 
-  def cursor(objs) when is_list(objs) do
+  def end_cursor(objs) when is_list(objs) do
     objs
     |> Enum.min_by(& &1.id)
-    |> cursor()
+    |> end_cursor(true)
   end
 
-  def cursor(obj) do
-    id = id_for(obj)
-    ref = Ref.new(id)
-    Cursor.new(ref, obj.id)
+  def start_cursor(objs) when is_list(objs) do
+    objs
+    |> Enum.max_by(& &1.id)
+    |> end_cursor(false)
+  end
+
+  def end_cursor(obj = %{id: val}, gap \\ nil) do
+    Cursor.new(Ref.from(obj), val, gap)
   end
 
   def resolve_leaf(obj = %User{}, "screenName") do
@@ -108,7 +112,7 @@ defmodule Weaver.Resolvers do
         {:done, []}
 
       tweets ->
-        {:continue, Enum.take(tweets, @api_take), cursor(tweets)}
+        {:continue, Enum.take(tweets, @api_take), end_cursor(tweets)}
     end
   end
 
@@ -138,7 +142,7 @@ defmodule Weaver.Resolvers do
         {:done, []}
 
       tweets ->
-        {:continue, Enum.take(tweets, @api_take), cursor(tweets)}
+        {:continue, Enum.take(tweets, @api_take), end_cursor(tweets)}
     end
   end
 
@@ -171,7 +175,7 @@ defmodule Weaver.Resolvers do
           |> Enum.filter(& &1.retweeted_status)
           |> Enum.take(@api_take)
 
-        {:continue, tweets, cursor(tweets)}
+        {:continue, tweets, end_cursor(tweets)}
     end
   end
 
@@ -202,7 +206,7 @@ defmodule Weaver.Resolvers do
         {:done, []}
 
       tweets ->
-        {:continue, Enum.take(tweets, @api_take), cursor(tweets)}
+        {:continue, Enum.take(tweets, @api_take), end_cursor(tweets)}
     end
   end
 

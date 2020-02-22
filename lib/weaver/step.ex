@@ -52,7 +52,7 @@ defmodule Weaver.Step do
     returned as the result of `Weaver.Step.process/1`.
     """
 
-    alias Weaver.{Cursor, Ref, Resolvers, Step}
+    alias Weaver.{Ref, Step}
 
     @type t() :: {
             list(tuple()),
@@ -61,7 +61,7 @@ defmodule Weaver.Step do
             Step.t() | nil
           }
 
-    def new() do
+    def empty() do
       {[], [], [], nil}
     end
 
@@ -75,13 +75,8 @@ defmodule Weaver.Step do
     end
 
     def add_relation_data(result, {from = %Ref{}, predicate, [obj | objs]}) do
-      obj_ref =
-        obj
-        |> Resolvers.id_for()
-        |> Ref.new()
-
       result
-      |> add_data({from, predicate, obj_ref})
+      |> add_data({from, predicate, Ref.from(obj)})
       |> add_relation_data({from, predicate, objs})
     end
 
@@ -95,7 +90,7 @@ defmodule Weaver.Step do
       {data, meta, [tuple | dispatched], next}
     end
 
-    def next({data, meta, dispatched, _next}, step) do
+    def set_next({data, meta, dispatched, _next}, step) do
       {data, meta, dispatched, step}
     end
   end
@@ -114,7 +109,7 @@ defmodule Weaver.Step do
   """
   @spec process(Step.t()) :: Result.t()
   def process(step) do
-    do_process(step, Result.new())
+    do_process(step, Result.empty())
   end
 
   def do_process(steps, result) when is_list(steps) do
@@ -169,13 +164,8 @@ defmodule Weaver.Step do
       ) do
     value = Resolvers.resolve_leaf(parent_obj, field)
 
-    parent_ref =
-      parent_obj
-      |> Resolvers.id_for()
-      |> Ref.new()
-
     result
-    |> Result.add_data({parent_ref, field, value})
+    |> Result.add_data({Ref.from(parent_obj), field, value})
   end
 
   def do_process(
@@ -195,18 +185,8 @@ defmodule Weaver.Step do
         Result.dispatch(result, step)
 
       obj ->
-        parent_ref =
-          parent_obj
-          |> Resolvers.id_for()
-          |> Ref.new()
-
-        obj_ref =
-          obj
-          |> Resolvers.id_for()
-          |> Ref.new()
-
         result
-        |> Result.add_data({parent_ref, field, obj_ref})
+        |> Result.add_data({Ref.from(parent_obj), field, Ref.from(obj)})
         |> continue_with(obj, step, fields)
     end
   end
@@ -220,10 +200,7 @@ defmodule Weaver.Step do
         },
         result
       ) do
-    parent_ref =
-      parent_obj
-      |> Resolvers.id_for()
-      |> Ref.new()
+    parent_ref = Ref.from(parent_obj)
 
     cond do
       step.refresh && !step.refreshed ->
@@ -245,11 +222,11 @@ defmodule Weaver.Step do
             do_process(step, result)
 
           _else ->
-            Result.new()
+            Result.empty()
         end
 
       true ->
-        Result.new()
+        Result.empty()
     end
   end
 
@@ -261,17 +238,20 @@ defmodule Weaver.Step do
         },
         result
       ) do
-    parent_ref = parent_obj |> Resolvers.id_for() |> Ref.new()
+    parent_ref = Ref.from(parent_obj)
     resolved = Resolvers.dispatched(parent_obj, field, step.cursor)
 
     first_meta =
       if step.cursor do
         {:del, parent_ref, field, step.cursor}
       else
-        new_cursor =
-          resolved |> elem(1) |> Enum.take(1) |> Resolvers.cursor() |> Map.put(:gap, false)
+        start_cursor =
+          case resolved do
+            {:continue, objs, _cursor} -> Resolvers.start_cursor(objs)
+            {:done, objs} -> Resolvers.start_cursor(objs)
+          end
 
-        {:add, parent_ref, field, new_cursor}
+        {:add, parent_ref, field, start_cursor}
       end
 
     {objs, meta, next} =
@@ -348,7 +328,7 @@ defmodule Weaver.Step do
     result
     |> Result.add_relation_data({parent_ref, field, objs})
     |> Result.add_meta(meta)
-    |> Result.next(next)
+    |> Result.set_next(next)
     |> continue_with(objs, step, fields)
   end
 

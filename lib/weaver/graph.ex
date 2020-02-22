@@ -88,7 +88,7 @@ defmodule Weaver.Graph do
 
   @impl Store
   def reset() do
-    GenServer.call(__MODULE__, :reset)
+    GenServer.call(__MODULE__, :reset, @call_timeout)
   end
 
   def reset!() do
@@ -262,8 +262,8 @@ defmodule Weaver.Graph do
 
   def handle_call(:reset, _from, _uids) do
     result =
-      with {:ok, _result} <- Dlex.alter(Dlex, %{drop_all: true}),
-           {:ok, _result} <- Dlex.alter(Dlex, Enum.join(@indexes, "\n")) do
+      with {:ok, _result} <- Dlex.alter(Dlex, %{drop_all: true}, timeout: @timeout),
+           {:ok, _result} <- Dlex.alter(Dlex, Enum.join(@indexes, "\n"), timeout: @timeout) do
         :ok
       end
 
