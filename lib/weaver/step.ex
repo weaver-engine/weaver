@@ -242,11 +242,9 @@ defmodule Weaver.Step do
     resolved = Resolvers.dispatched(parent_obj, field, step.cursor)
     first_meta = first_meta(step, resolved, parent_ref, field)
 
-    {done?, gap_closed, objs, cursor} = analyze_resolved(resolved, step)
-
     {objs, meta, next} =
-      cond do
-        done? ->
+      case analyze_resolved(resolved, step) do
+        {:done, objs} ->
           meta = [
             first_meta
           ]
@@ -254,7 +252,7 @@ defmodule Weaver.Step do
           {objs, meta, nil}
 
         # no gap or gap not closed -> continue with this cursor
-        !step.gap || !gap_closed ->
+        {:continue, objs, cursor, gap_closed: false} ->
           cursor = %{cursor | gap: true}
 
           meta = [
@@ -267,7 +265,7 @@ defmodule Weaver.Step do
 
         # gap closed and next sequence is only a single record
         # -> continue with the single-entry cursor
-        gap_closed && step.gap.gap ->
+        {:continue, objs, gap_closed: true, next_gap: true} ->
           meta = [first_meta]
 
           next = %{
@@ -281,7 +279,7 @@ defmodule Weaver.Step do
           {objs, meta, next}
 
         # gap closed -> look up the next gap in next iteration
-        gap_closed ->
+        {:continue, objs, gap_closed: true, next_gap: _} ->
           meta = [
             first_meta,
             {:del, parent_ref, field, step.gap}
@@ -321,18 +319,24 @@ defmodule Weaver.Step do
   end
 
   defp analyze_resolved({:done, objs}, _) do
-    {true, nil, objs, nil}
+    {:done, objs}
   end
 
+  # no gap
   defp analyze_resolved({:continue, objs, cursor}, %{gap: nil}) do
-    {false, false, objs, cursor}
+    {:continue, objs, cursor, gap_closed: false}
   end
 
-  defp analyze_resolved({:continue, objs, cursor}, %{gap: %Cursor{ref: %Ref{id: gap_id}}}) do
-    case Enum.split_while(objs, &(Resolvers.id_for(&1) != gap_id)) do
-      {objs, []} -> {false, false, objs, cursor}
-      {objs, _} -> {false, true, objs, cursor}
+  # gap closed?
+  defp analyze_resolved({:continue, objs, cursor}, %{gap: gap}) do
+    case Enum.split_while(objs, &before_cursor?(&1, gap)) do
+      {objs, []} -> {:continue, objs, cursor, gap_closed: false}
+      {objs, __} -> {:continue, objs, gap_closed: true, next_gap: gap.gap}
     end
+  end
+
+  defp before_cursor?(obj, cursor) do
+    Resolvers.id_for(obj) != cursor.ref.id
   end
 
   defp continue_with(result, step, subtree) do
