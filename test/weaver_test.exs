@@ -3,6 +3,33 @@ defmodule WeaverTest do
 
   alias Weaver.ExTwitter.Mock, as: Twitter
 
+  @query """
+  query {
+    node(id: "TwitterUser:elixirdigest") {
+      ... on TwitterUser {
+        id
+        screenName
+        favoritesCount
+        favorites {
+          text
+          publishedAt
+          user {
+            screenName
+          }
+          retweetsCount
+          retweets {
+            text
+            publishedAt
+            user {
+              screenName
+            }
+          }
+        }
+      }
+    }
+  }
+  """
+
   def twitter_mock_for(user, tweets) do
     fn [id: user_id, tweet_mode: :extended, count: count] ->
       assert user_id == user.id
@@ -19,47 +46,12 @@ defmodule WeaverTest do
   end
 
   describe "prepare" do
-    @query """
-    query {
-      node(id: "TwitterUser:elixirdigest") {
-        id
-      }
-    }
-    """
-
     test "prepare" do
       assert %Weaver.Step{} = Weaver.prepare(@query)
     end
   end
 
-  describe "3 levels without cursors" do
-    @query """
-    query {
-      node(id: "TwitterUser:elixirdigest") {
-        ... on TwitterUser {
-          id
-          screenName
-          favoritesCount
-          favorites {
-            text
-            publishedAt
-            user {
-              screenName
-            }
-            retweetsCount
-            retweets {
-              text
-              publishedAt
-              user {
-                screenName
-              }
-            }
-          }
-        }
-      }
-    }
-    """
-
+  describe "without gaps" do
     setup do
       user = build(ExTwitter.Model.User, screen_name: "elixirdigest")
       favorites = build(ExTwitter.Model.Tweet, 10, fn i -> [id: 11 - i] end)
@@ -139,34 +131,7 @@ defmodule WeaverTest do
     end
   end
 
-  describe "3 levels with 1 gap" do
-    @query """
-    query {
-      node(id: "TwitterUser:elixirdigest") {
-        ... on TwitterUser {
-          id
-          screenName
-          favoritesCount
-          favorites {
-            text
-            publishedAt
-            user {
-              screenName
-            }
-            retweetsCount
-            retweets {
-              text
-              publishedAt
-              user {
-                screenName
-              }
-            }
-          }
-        }
-      }
-    }
-    """
-
+  describe "with gaps" do
     setup :use_graph
 
     setup do
@@ -315,6 +280,70 @@ defmodule WeaverTest do
       # favorites pt. 6
       |> weave_next()
       |> assert_done()
+    end
+  end
+
+  describe "deleted gap tweet" do
+    setup :use_graph
+
+    setup do
+      user = build(ExTwitter.Model.User, screen_name: "elixirdigest")
+      favorites = build(ExTwitter.Model.Tweet, 20, fn i -> [id: 21 - i] end)
+
+      meta = [
+        {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         %Cursor{val: 20, gap: false, ref: %Ref{id: "Tweet:20"}}}
+      ]
+
+      Weaver.Graph.store!([], meta)
+
+      {:ok, user: user, favorites: favorites}
+    end
+
+    test "works", %{user: user, favorites: favorites} do
+      [fav21, fav20 | _] = favorites
+
+      @query
+      |> Weaver.prepare(cache: Weaver.Graph)
+      |> weave_initial(Twitter, :user, fn "elixirdigest" -> user end)
+      |> assert_has_data([
+        {%Ref{id: "TwitterUser:elixirdigest"}, "screenName", "elixirdigest"},
+        {%Ref{id: "TwitterUser:elixirdigest"}, "favoritesCount", user.favourites_count}
+      ])
+      |> assert_meta([])
+      |> assert_dispatched([
+        %{
+          ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
+          cursor: nil,
+          gap: :not_loaded,
+          data: ^user
+        }
+      ])
+
+      # favorites initial
+      |> weave_dispatched(Twitter, :favorites, fn [
+                                                    id: user_id,
+                                                    tweet_mode: :extended,
+                                                    count: count
+                                                  ] ->
+        assert user_id == user.id
+        [fav21, _ | tail] = favorites
+        [fav21 | Enum.take(tail, count - 1)]
+      end)
+      |> assert_has_data([
+        {%Ref{id: "TwitterUser:elixirdigest"}, "favorites", %Ref{id: "Tweet:#{fav21.id}"}},
+        {%Ref{id: "Tweet:#{fav21.id}"}, "text", fav21.full_text}
+      ])
+      |> refute_has_data([
+        {%Ref{id: "TwitterUser:elixirdigest"}, "favorites", %Ref{id: "Tweet:#{fav20.id}"}},
+        {%Ref{id: "Tweet:#{fav20.id}"}, "text", fav20.full_text}
+      ])
+      |> assert_meta([
+        {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         %Cursor{val: 21, gap: false, ref: %Ref{id: "Tweet:21"}}},
+        {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         %Cursor{val: 20, gap: false, ref: %Ref{id: "Tweet:20"}}}
+      ])
     end
   end
 end
