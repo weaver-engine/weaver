@@ -93,6 +93,21 @@ defmodule Weaver.IntegrationCase do
   end
 
   @doc "Matches the given expression against the result's `data`."
+  defmacro refute_has_data(result_expr, match_expr) do
+    quote do
+      result = unquote(result_expr)
+      data = Result.data(result)
+
+      case unquote(match_expr) do
+        subset when is_list(subset) -> Enum.each(subset, &refute(&1 in data))
+        tuple when is_tuple(tuple) -> refute tuple in data
+      end
+
+      result
+    end
+  end
+
+  @doc "Matches the given expression against the result's `data`."
   defmacro assert_data(result_expr, match_expr) do
     quote do
       result = unquote(result_expr)

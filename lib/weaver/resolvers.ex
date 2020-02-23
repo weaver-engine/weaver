@@ -24,17 +24,19 @@ defmodule Weaver.Resolvers do
   def end_cursor(objs) when is_list(objs) do
     objs
     |> Enum.min_by(& &1.id)
-    |> end_cursor(true)
+    |> cursor(true)
   end
 
   def start_cursor(objs) when is_list(objs) do
     objs
     |> Enum.max_by(& &1.id)
-    |> end_cursor(false)
+    |> cursor(false)
   end
 
-  def end_cursor(obj = %{id: val}, gap \\ nil) do
-    Cursor.new(Ref.from(obj), val, gap)
+  def cursor_val(%{id: val}), do: val
+
+  def cursor(obj, gap \\ nil) do
+    Cursor.new(Ref.from(obj), cursor_val(obj), gap)
   end
 
   def resolve_leaf(obj = %User{}, "screenName") do

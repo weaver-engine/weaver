@@ -336,7 +336,8 @@ defmodule Weaver.Step do
   end
 
   defp before_cursor?(obj, cursor) do
-    Resolvers.id_for(obj) != cursor.ref.id
+    Resolvers.cursor_val(obj) > cursor.val &&
+      Resolvers.id_for(obj) != cursor.ref.id
   end
 
   defp continue_with(result, step, subtree) do
