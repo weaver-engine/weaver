@@ -240,89 +240,61 @@ defmodule Weaver.Step do
       ) do
     parent_ref = Ref.from(parent_obj)
     resolved = Resolvers.dispatched(parent_obj, field, step.cursor)
+    first_meta = first_meta(step, resolved, parent_ref, field)
 
-    first_meta =
-      if step.cursor do
-        {:del, parent_ref, field, step.cursor}
-      else
-        start_cursor =
-          case resolved do
-            {:continue, objs, _cursor} -> Resolvers.start_cursor(objs)
-            {:done, objs} -> Resolvers.start_cursor(objs)
-          end
-
-        {:add, parent_ref, field, start_cursor}
-      end
+    {done?, gap_closed, objs, cursor} = analyze_resolved(resolved, step)
 
     {objs, meta, next} =
-      case resolved do
-        {:continue, objs, cursor} ->
-          case step.gap do
-            %Cursor{ref: %Ref{id: gap_id}} ->
-              # credo:disable-for-next-line Credo.Check.Refactor.Nesting
-              case Enum.split_while(objs, &(Resolvers.id_for(&1) != gap_id)) do
-                {objs, []} ->
-                  # gap not closed -> continue with this cursor
-                  cursor = %{cursor | gap: true}
-
-                  meta = [
-                    first_meta,
-                    {:add, parent_ref, field, cursor}
-                  ]
-
-                  next = %{step | cursor: cursor, count: step.count + length(objs)}
-                  {objs, meta, next}
-
-                {objs, _} ->
-                  # gap closed
-                  if step.gap.gap do
-                    meta = [first_meta]
-
-                    next = %{
-                      step
-                      | cursor: step.gap,
-                        gap: :not_loaded,
-                        refreshed: true,
-                        count: step.count + length(objs)
-                    }
-
-                    {objs, meta, next}
-                  else
-                    meta = [
-                      first_meta,
-                      {:del, parent_ref, field, step.gap}
-                    ]
-
-                    next = %{
-                      step
-                      | gap: :not_loaded,
-                        refreshed: true,
-                        count: step.count + length(objs)
-                    }
-
-                    {objs, meta, next}
-                  end
-              end
-
-            _else ->
-              # no gap -> continue with this cursor
-              cursor = %{cursor | gap: true}
-
-              meta = [
-                first_meta,
-                {:add, parent_ref, field, cursor}
-              ]
-
-              next = %{step | cursor: cursor, count: step.count + length(objs)}
-              {objs, meta, next}
-          end
-
-        {:done, objs} ->
+      cond do
+        done? ->
           meta = [
             first_meta
           ]
 
           {objs, meta, nil}
+
+        # no gap or gap not closed -> continue with this cursor
+        !step.gap || !gap_closed ->
+          cursor = %{cursor | gap: true}
+
+          meta = [
+            first_meta,
+            {:add, parent_ref, field, cursor}
+          ]
+
+          next = %{step | cursor: cursor, count: step.count + length(objs)}
+          {objs, meta, next}
+
+        # gap closed and next sequence is only a single record
+        # -> continue with the single-entry cursor
+        gap_closed && step.gap.gap ->
+          meta = [first_meta]
+
+          next = %{
+            step
+            | cursor: step.gap,
+              gap: :not_loaded,
+              refreshed: true,
+              count: step.count + length(objs)
+          }
+
+          {objs, meta, next}
+
+        # gap closed -> look up the next gap in next iteration
+        gap_closed ->
+          meta = [
+            first_meta,
+            {:del, parent_ref, field, step.gap}
+          ]
+
+          next = %{
+            step
+            | gap: :not_loaded,
+              refreshed: true,
+              count: step.count + length(objs)
+          }
+
+          {objs, meta, next}
       end
 
     result
@@ -334,6 +306,33 @@ defmodule Weaver.Step do
 
   def do_process(step, _next) do
     raise "Undhandled step:\n\n#{inspect(Map.from_struct(step), pretty: true)}"
+  end
+
+  defp first_meta(step = %{cursor: %Cursor{}}, _resolved, parent_ref, field) do
+    {:del, parent_ref, field, step.cursor}
+  end
+
+  defp first_meta(_step, {:continue, objs, _cursor}, parent_ref, field) do
+    {:add, parent_ref, field, Resolvers.start_cursor(objs)}
+  end
+
+  defp first_meta(_step, {:done, objs}, parent_ref, field) do
+    {:add, parent_ref, field, Resolvers.start_cursor(objs)}
+  end
+
+  defp analyze_resolved({:done, objs}, _) do
+    {true, nil, objs, nil}
+  end
+
+  defp analyze_resolved({:continue, objs, cursor}, %{gap: nil}) do
+    {false, false, objs, cursor}
+  end
+
+  defp analyze_resolved({:continue, objs, cursor}, %{gap: %Cursor{ref: %Ref{id: gap_id}}}) do
+    case Enum.split_while(objs, &(Resolvers.id_for(&1) != gap_id)) do
+      {objs, []} -> {false, false, objs, cursor}
+      {objs, _} -> {false, true, objs, cursor}
+    end
   end
 
   defp continue_with(result, step, subtree) do
