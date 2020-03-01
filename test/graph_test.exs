@@ -20,7 +20,11 @@ defmodule Weaver.GraphTest do
 
       meta = [
         {:add, user1, "favorites", %Cursor{val: 140, gap: false, ref: %Ref{id: "Tweet:140"}}},
-        {:add, user1, "favorites", %Cursor{val: 134, gap: true, ref: %Ref{id: "Tweet:134"}}}
+        {:add, user1, "favorites", %Cursor{val: 134, gap: true, ref: %Ref{id: "Tweet:134"}}},
+        {:add, user1, "favorites", %Cursor{val: 34, gap: true, ref: %Ref{id: "Tweet:34"}}},
+        {:add, user1, "favorites", %Cursor{val: 4, gap: false, ref: %Ref{id: "Tweet:4"}}},
+        {:add, user1, "favorites", %Cursor{val: 3, gap: true, ref: %Ref{id: "Tweet:3"}}},
+        {:add, user1, "favorites", %Cursor{val: 1, gap: false, ref: %Ref{id: "Tweet:1"}}}
       ]
 
       store!(data, meta)
@@ -41,7 +45,7 @@ defmodule Weaver.GraphTest do
     end
 
     test "cursors", %{user1: user1} do
-      assert {:ok, [cursor1, cursor2]} = cursors(user1, "favorites", 3)
+      assert {:ok, [cursor1, cursor2]} = cursors(user1, "favorites", limit: 2)
       assert cursor1 == %Cursor{val: 140, gap: false, ref: %Ref{id: "Tweet:140"}}
       assert cursor2 == %Cursor{val: 134, gap: true, ref: %Ref{id: "Tweet:134"}}
     end
@@ -53,8 +57,19 @@ defmodule Weaver.GraphTest do
                   %Cursor{val: 140, gap: false, ref: %Ref{id: "Tweet:140"}}}
                ])
 
-      assert {:ok, [cursor2]} = cursors(user1, "favorites", 3)
+      assert {:ok, [cursor2]} = cursors(user1, "favorites", limit: 1)
       assert cursor2 == %Cursor{val: 134, gap: true, ref: %Ref{id: "Tweet:134"}}
+    end
+
+    test "cursors less_than", %{user1: user1} do
+      assert {:ok, cursors} = cursors(user1, "favorites", less_than: 134)
+
+      assert cursors == [
+               %Cursor{val: 34, gap: true, ref: %Ref{id: "Tweet:34"}},
+               %Cursor{val: 4, gap: false, ref: %Ref{id: "Tweet:4"}},
+               %Cursor{val: 3, gap: true, ref: %Ref{id: "Tweet:3"}},
+               %Cursor{val: 1, gap: false, ref: %Ref{id: "Tweet:1"}}
+             ]
     end
   end
 end

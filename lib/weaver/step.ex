@@ -205,7 +205,7 @@ defmodule Weaver.Step do
     cond do
       step.refresh && !step.refreshed ->
         gap =
-          cursors!(step.cache, parent_ref, field, 1)
+          cursors!(step.cache, parent_ref, field, limit: 1)
           |> List.first()
 
         step = %{step | gap: gap}
@@ -213,7 +213,7 @@ defmodule Weaver.Step do
         do_process(step, result)
 
       step.backfill ->
-        cursors!(step.cache, parent_ref, field, 3)
+        cursors!(step.cache, parent_ref, field, limit: 3)
         |> Enum.split_while(&(!&1.gap))
         |> case do
           {_refresh_end, [gap_start | rest]} ->
@@ -240,14 +240,36 @@ defmodule Weaver.Step do
       ) do
     parent_ref = Ref.from(parent_obj)
     resolved = Resolvers.dispatched(parent_obj, field, step.cursor)
-    first_meta = first_meta(step, resolved, parent_ref, field)
+    first_meta = List.wrap(first_meta(step, resolved, parent_ref, field))
 
     {objs, meta, next} =
       case analyze_resolved(resolved, step) do
         {:done, objs} ->
-          meta = [
-            first_meta
-          ]
+          meta =
+            cond do
+              step.cursor ->
+                other_meta =
+                  step.cache
+                  |> cursors!(parent_ref, field, less_than: step.cursor.val)
+                  |> Enum.map(&{:del, parent_ref, field, &1})
+
+                first_meta ++
+                  [{:add, parent_ref, field, %{step.cursor | gap: false}}] ++
+                  other_meta
+
+              objs == [] ->
+                step.cache
+                |> cursors!(parent_ref, field)
+                |> Enum.map(&{:del, parent_ref, field, &1})
+
+              true ->
+                other_meta =
+                  step.cache
+                  |> cursors!(parent_ref, field)
+                  |> Enum.map(&{:del, parent_ref, field, &1})
+
+                first_meta ++ other_meta
+            end
 
           {objs, meta, nil}
 
@@ -255,10 +277,14 @@ defmodule Weaver.Step do
         {:continue, objs, cursor, gap_closed: false} ->
           cursor = %{cursor | gap: true}
 
-          meta = [
-            first_meta,
-            {:add, parent_ref, field, cursor}
-          ]
+          other_meta = [{:add, parent_ref, field, cursor}]
+
+          meta =
+            cond do
+              step.cursor -> first_meta ++ other_meta
+              length(objs) == 1 -> other_meta
+              true -> first_meta ++ other_meta
+            end
 
           next = %{step | cursor: cursor, count: step.count + length(objs)}
           {objs, meta, next}
@@ -266,7 +292,7 @@ defmodule Weaver.Step do
         # gap closed and next sequence is only a single record
         # -> continue with the single-entry cursor
         {:continue, objs, gap_closed: true, next_gap: true} ->
-          meta = [first_meta]
+          meta = first_meta
 
           next = %{
             step
@@ -280,10 +306,7 @@ defmodule Weaver.Step do
 
         # gap closed -> look up the next gap in next iteration
         {:continue, objs, gap_closed: true, next_gap: _} ->
-          meta = [
-            first_meta,
-            {:del, parent_ref, field, step.gap}
-          ]
+          meta = first_meta ++ [{:del, parent_ref, field, step.gap}]
 
           next = %{
             step
@@ -312,6 +335,10 @@ defmodule Weaver.Step do
 
   defp first_meta(_step, {:continue, objs, _cursor}, parent_ref, field) do
     {:add, parent_ref, field, Resolvers.start_cursor(objs)}
+  end
+
+  defp first_meta(_step, {:done, []}, _parent_ref, _field) do
+    nil
   end
 
   defp first_meta(_step, {:done, objs}, parent_ref, field) do
@@ -359,13 +386,15 @@ defmodule Weaver.Step do
     continue_with(result, new_step, subtree)
   end
 
-  defp cursors!(nil, _parent_ref, _field, _limit), do: []
+  defp cursors!(mod, parent_ref, field, opts \\ [])
 
-  defp cursors!({mod, opts}, parent_ref, field, limit) do
-    mod.cursors!(parent_ref, field, limit, opts)
+  defp cursors!(nil, _parent_ref, _field, _opts), do: []
+
+  defp cursors!({mod, cache_opts}, parent_ref, field, opts) do
+    mod.cursors!(parent_ref, field, Keyword.merge(cache_opts, opts))
   end
 
-  defp cursors!(mod, parent_ref, field, limit) do
-    mod.cursors!(parent_ref, field, limit)
+  defp cursors!(mod, parent_ref, field, opts) do
+    mod.cursors!(parent_ref, field, opts)
   end
 end

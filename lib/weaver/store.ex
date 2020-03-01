@@ -10,7 +10,7 @@ defmodule Weaver.Store do
 
   # read
   @callback count(Ref.t(), String.t()) :: {:ok, integer()} | {:error, any()}
-  @callback cursors(Ref.t(), String.t(), integer()) :: {:ok, list(Cursor.t())} | {:error, any()}
+  @callback cursors(Ref.t(), String.t(), keyword()) :: {:ok, list(Cursor.t())} | {:error, any()}
   # @callback data(Ref.t(), String.t(), Cursor.t() | nil) ::
   #             {:ok, list(tuple())} | {:error, any()}
 

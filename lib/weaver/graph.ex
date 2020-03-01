@@ -63,12 +63,12 @@ defmodule Weaver.Graph do
   end
 
   @impl Store
-  def cursors(ref, predicate, limit \\ 100) do
-    GenServer.call(__MODULE__, {:cursors, ref, predicate, limit}, @call_timeout)
+  def cursors(ref, predicate, opts \\ []) do
+    GenServer.call(__MODULE__, {:cursors, ref, predicate, opts}, @call_timeout)
   end
 
-  def cursors!(ref, predicate, limit \\ 100) do
-    case cursors(ref, predicate, limit) do
+  def cursors!(ref, predicate, opts \\ []) do
+    case cursors(ref, predicate, opts) do
       {:ok, result} -> result
       {:error, e} -> raise e
     end
@@ -203,7 +203,7 @@ defmodule Weaver.Graph do
     {:reply, result, state}
   end
 
-  def handle_call({:cursors, ref, predicate, limit}, _from, state) do
+  def handle_call({:cursors, ref, predicate, opts}, _from, state) do
     cursor_pred = "#{predicate}.cursors"
 
     query = ~s"""
@@ -230,7 +230,7 @@ defmodule Weaver.Graph do
             end)
             |> elem(0)
             |> Enum.sort_by(& &1.val, &>=/2)
-            |> Enum.take(limit)
+            |> apply_filters(opts)
 
           {:ok, cursors}
 
@@ -274,6 +274,20 @@ defmodule Weaver.Graph do
     result = do_query(query)
 
     {:reply, result, %{}}
+  end
+
+  defp apply_filters(results, []), do: results
+
+  defp apply_filters(results, [{:limit, count} | opts]) do
+    results
+    |> Enum.take(count)
+    |> apply_filters(opts)
+  end
+
+  defp apply_filters(results, [{:less_than, val} | opts]) do
+    results
+    |> Enum.filter(&(&1.val < val))
+    |> apply_filters(opts)
   end
 
   defp do_query(query) do
