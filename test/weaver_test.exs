@@ -283,7 +283,7 @@ defmodule WeaverTest do
     end
   end
 
-  describe "deleted gap tweet" do
+  describe "deleted tweets" do
     setup :use_graph
 
     setup do
@@ -292,7 +292,17 @@ defmodule WeaverTest do
 
       meta = [
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 20, gap: false, ref: %Ref{id: "Tweet:20"}}}
+         %Cursor{val: 20, gap: false, ref: %Ref{id: "Tweet:20"}}},
+        {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         %Cursor{val: 16, gap: true, ref: %Ref{id: "Tweet:16"}}},
+        {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         %Cursor{val: 12, gap: true, ref: %Ref{id: "Tweet:12"}}},
+        {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         %Cursor{val: 10, gap: false, ref: %Ref{id: "Tweet:10"}}},
+        {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         %Cursor{val: 8, gap: true, ref: %Ref{id: "Tweet:8"}}},
+        {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         %Cursor{val: 7, gap: false, ref: %Ref{id: "Tweet:7"}}}
       ]
 
       Weaver.Graph.store!([], meta)
@@ -300,25 +310,12 @@ defmodule WeaverTest do
       {:ok, user: user, favorites: favorites}
     end
 
-    test "works", %{user: user, favorites: favorites} do
+    test "works with deleted gap tweet", %{user: user, favorites: favorites} do
       [fav21, fav20 | _] = favorites
 
       @query
       |> Weaver.prepare(cache: Weaver.Graph)
       |> weave_initial(Twitter, :user, fn "elixirdigest" -> user end)
-      |> assert_has_data([
-        {%Ref{id: "TwitterUser:elixirdigest"}, "screenName", "elixirdigest"},
-        {%Ref{id: "TwitterUser:elixirdigest"}, "favoritesCount", user.favourites_count}
-      ])
-      |> assert_meta([])
-      |> assert_dispatched([
-        %{
-          ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
-          cursor: nil,
-          gap: :not_loaded,
-          data: ^user
-        }
-      ])
 
       # favorites initial
       |> weave_dispatched(Twitter, :favorites, fn [
@@ -344,6 +341,128 @@ defmodule WeaverTest do
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
          %Cursor{val: 20, gap: false, ref: %Ref{id: "Tweet:20"}}}
       ])
+    end
+
+    test "deletes remaining cursors with deleted remaining tweets", %{
+      user: user,
+      favorites: favorites
+    } do
+      [fav21, fav20 | _] = favorites
+      favorites = Enum.take(favorites, 1)
+
+      @query
+      |> Weaver.prepare(cache: Weaver.Graph)
+      |> weave_initial(Twitter, :user, fn "elixirdigest" -> user end)
+
+      # favorites initial
+      |> weave_dispatched(Twitter, :favorites, twitter_mock_for(user, favorites))
+      |> assert_has_data([
+        {%Ref{id: "TwitterUser:elixirdigest"}, "favorites", %Ref{id: "Tweet:#{fav21.id}"}},
+        {%Ref{id: "Tweet:#{fav21.id}"}, "text", fav21.full_text}
+      ])
+      |> refute_has_data([
+        {%Ref{id: "TwitterUser:elixirdigest"}, "favorites", %Ref{id: "Tweet:#{fav20.id}"}},
+        {%Ref{id: "Tweet:#{fav20.id}"}, "text", fav20.full_text}
+      ])
+      |> assert_meta([
+        {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         %Cursor{val: 21, gap: true, ref: %Ref{id: "Tweet:21"}}}
+      ])
+      |> weave_next(
+        Twitter,
+        :favorites,
+        twitter_mock_for(user, favorites, max_id: 20)
+      )
+      |> assert_meta([
+        {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         %Cursor{val: 21, gap: true, ref: %Ref{id: "Tweet:21"}}},
+        {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         %Cursor{val: 21, gap: false, ref: %Ref{id: "Tweet:21"}}},
+        {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         %Cursor{val: 20, gap: false, ref: %Ref{id: "Tweet:20"}}},
+        {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         %Cursor{val: 16, gap: true, ref: %Ref{id: "Tweet:16"}}},
+        {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         %Cursor{val: 12, gap: true, ref: %Ref{id: "Tweet:12"}}},
+        {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         %Cursor{val: 10, gap: false, ref: %Ref{id: "Tweet:10"}}},
+        {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         %Cursor{val: 8, gap: true, ref: %Ref{id: "Tweet:8"}}},
+        {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         %Cursor{val: 7, gap: false, ref: %Ref{id: "Tweet:7"}}}
+      ])
+      |> refute_next()
+    end
+
+    test "deletes remaining cursors with deleted remaining tweets2", %{
+      user: user,
+      favorites: favorites
+    } do
+      [_, _, _, _, _, _, fav15 | _] = favorites
+      favorites = Enum.take(favorites, 7)
+
+      @query
+      |> Weaver.prepare(cache: Weaver.Graph)
+      |> weave_initial(Twitter, :user, fn "elixirdigest" -> user end)
+
+      # favorites initial
+      |> weave_dispatched(Twitter, :favorites, twitter_mock_for(user, favorites))
+
+      # favorites pt. 2
+      |> weave_next(Twitter, :favorites, twitter_mock_for(user, favorites, max_id: 15))
+      |> assert_has_data([
+        {%Ref{id: "TwitterUser:elixirdigest"}, "favorites", %Ref{id: "Tweet:#{fav15.id}"}},
+        {%Ref{id: "Tweet:#{fav15.id}"}, "text", fav15.full_text}
+      ])
+      |> assert_meta([
+        {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         %Cursor{val: 16, gap: true, ref: %Ref{id: "Tweet:16"}}},
+        {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         %Cursor{val: 15, gap: true, ref: %Ref{id: "Tweet:15"}}}
+      ])
+
+      # favorites last pt.
+      |> weave_next(Twitter, :favorites, twitter_mock_for(user, favorites, max_id: 14))
+      |> assert_meta([
+        {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         %Cursor{val: 15, gap: true, ref: %Ref{id: "Tweet:15"}}},
+        {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         %Cursor{val: 15, gap: false, ref: %Ref{id: "Tweet:15"}}},
+        {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         %Cursor{val: 12, gap: true, ref: %Ref{id: "Tweet:12"}}},
+        {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         %Cursor{val: 10, gap: false, ref: %Ref{id: "Tweet:10"}}},
+        {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         %Cursor{val: 8, gap: true, ref: %Ref{id: "Tweet:8"}}},
+        {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         %Cursor{val: 7, gap: false, ref: %Ref{id: "Tweet:7"}}}
+      ])
+      |> refute_next()
+    end
+
+    test "deletes all cursors with all tweets deleted", %{user: user} do
+      @query
+      |> Weaver.prepare(cache: Weaver.Graph)
+      |> weave_initial(Twitter, :user, fn "elixirdigest" -> user end)
+
+      # favorites initial
+      |> weave_dispatched(Twitter, :favorites, twitter_mock_for(user, []))
+      |> assert_data([])
+      |> assert_meta([
+        {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         %Cursor{val: 20, gap: false, ref: %Ref{id: "Tweet:20"}}},
+        {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         %Cursor{val: 16, gap: true, ref: %Ref{id: "Tweet:16"}}},
+        {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         %Cursor{val: 12, gap: true, ref: %Ref{id: "Tweet:12"}}},
+        {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         %Cursor{val: 10, gap: false, ref: %Ref{id: "Tweet:10"}}},
+        {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         %Cursor{val: 8, gap: true, ref: %Ref{id: "Tweet:8"}}},
+        {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         %Cursor{val: 7, gap: false, ref: %Ref{id: "Tweet:7"}}}
+      ])
+      |> refute_next()
     end
   end
 end
