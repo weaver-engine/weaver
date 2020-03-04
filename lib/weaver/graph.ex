@@ -196,8 +196,8 @@ defmodule Weaver.Graph do
           {:ok, _} = Dlex.mutate(Dlex, %{query: query}, statement, timeout: @timeout)
 
         {statement, del_statement} ->
-          {:ok, _} = Dlex.mutate(Dlex, %{query: query}, statement, timeout: @timeout)
           {:ok, _} = Dlex.delete(Dlex, del_query, del_statement, timeout: @timeout)
+          {:ok, _} = Dlex.mutate(Dlex, %{query: query}, statement, timeout: @timeout)
       end
 
     {:reply, result, state}

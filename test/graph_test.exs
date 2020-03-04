@@ -61,6 +61,19 @@ defmodule Weaver.GraphTest do
       assert cursor2 == %Cursor{val: 134, gap: true, ref: %Ref{id: "Tweet:134"}}
     end
 
+    test "delete and add same cursors", %{user1: user1} do
+      assert %{} =
+               store!([], [
+                 {:add, user1, "favorites",
+                  %Cursor{val: 140, gap: true, ref: %Ref{id: "Tweet:140"}}},
+                 {:del, user1, "favorites",
+                  %Cursor{val: 140, gap: false, ref: %Ref{id: "Tweet:140"}}}
+               ])
+
+      assert {:ok, [cursor2]} = cursors(user1, "favorites", limit: 1)
+      assert cursor2 == %Cursor{val: 140, gap: true, ref: %Ref{id: "Tweet:140"}}
+    end
+
     test "cursors less_than", %{user1: user1} do
       assert {:ok, cursors} = cursors(user1, "favorites", less_than: 134)
 
