@@ -5,7 +5,7 @@ defmodule Weaver.Graph do
 
   use GenServer
 
-  alias Weaver.{Cursor, Ref, Store}
+  alias Weaver.{Cursor, Ref, Store, Marker.ChunkStart, Marker.ChunkEnd}
 
   @behaviour Store
 
@@ -13,7 +13,10 @@ defmodule Weaver.Graph do
   @call_timeout :timer.seconds(75)
   @indexes [
     "id: string @index(hash,trigram) @upsert .",
-    "favorites.cursors: [int] ."
+    "weaver.markers.intValue: int @index(int) .",
+    "weaver.markers.predicate: string .",
+    "weaver.markers.type: string .",
+    "weaver.markers.object: uid ."
   ]
 
   def start_link(_args) do
@@ -44,6 +47,18 @@ defmodule Weaver.Graph do
         :ok
 
       {:del, %Ref{}, pred, %Cursor{}} when is_binary(pred) or is_atom(pred) ->
+        :ok
+
+      {:add, %Ref{}, pred, %ChunkStart{}} when is_binary(pred) or is_atom(pred) ->
+        :ok
+
+      {:del, %Ref{}, pred, %ChunkStart{}} when is_binary(pred) or is_atom(pred) ->
+        :ok
+
+      {:add, %Ref{}, pred, %ChunkEnd{}} when is_binary(pred) or is_atom(pred) ->
+        :ok
+
+      {:del, %Ref{}, pred, %ChunkEnd{}} when is_binary(pred) or is_atom(pred) ->
         :ok
 
       other ->
@@ -131,8 +146,33 @@ defmodule Weaver.Graph do
 
           ["#{sub} <#{predicate}.cursors> #{obj} (#{facets}) ."]
 
-        {:del, _subject, _predicate, %Cursor{}} ->
-          []
+        {:add, subject, predicate, marker = %ChunkStart{cursor: %Cursor{val: val, ref: object}}} ->
+          sub = property(subject, varnames)
+          obj = property(object, varnames)
+          val_var = property(val, varnames)
+          marker = property(marker, varnames)
+
+          [
+            "#{sub} <weaver.markers> #{marker} .",
+            "#{marker} <weaver.markers.predicate> #{inspect(predicate)} .",
+            "#{marker} <weaver.markers.intValue> #{val_var} .",
+            "#{marker} <weaver.markers.object> #{obj} .",
+            ~s|#{marker} <weaver.markers.type> "chunkStart" .|
+          ]
+
+        {:add, subject, predicate, marker = %ChunkEnd{cursor: %Cursor{val: val, ref: object}}} ->
+          sub = property(subject, varnames)
+          obj = property(object, varnames)
+          val_var = property(val, varnames)
+          marker = property(marker, varnames)
+
+          [
+            "#{sub} <weaver.markers> #{marker} .",
+            "#{marker} <weaver.markers.predicate> #{inspect(predicate)} .",
+            "#{marker} <weaver.markers.intValue> #{val_var} .",
+            "#{marker} <weaver.markers.object> #{obj} .",
+            ~s|#{marker} <weaver.markers.type> "chunkEnd" .|
+          ]
 
         {subject, predicate, object} ->
           sub = property(subject, varnames)
@@ -170,13 +210,48 @@ defmodule Weaver.Graph do
 
           ["#{sub} <#{predicate}.cursors> #{obj} (#{facets}) ."]
 
+        {:del, subject, predicate, marker = %ChunkStart{cursor: %Cursor{val: val, ref: object}}} ->
+          sub = property(subject, del_varnames)
+          obj = property(object, del_varnames)
+          val_var = property(val, del_varnames)
+          marker = property(marker, del_varnames)
+
+          [
+            "#{sub} <weaver.markers> #{marker} .",
+            "#{marker} <weaver.markers.predicate> #{inspect(predicate)} .",
+            "#{marker} <weaver.markers.intValue> #{val_var} .",
+            "#{marker} <weaver.markers.object> #{obj} .",
+            ~s|#{marker} <weaver.markers.type> "chunkStart" .|
+          ]
+
+        {:del, subject, predicate, marker = %ChunkEnd{cursor: %Cursor{val: val, ref: object}}} ->
+          sub = property(subject, del_varnames)
+          obj = property(object, del_varnames)
+          val_var = property(val, del_varnames)
+          marker = property(marker, del_varnames)
+
+          [
+            "#{sub} <weaver.markers> #{marker} .",
+            "#{marker} <weaver.markers.predicate> #{inspect(predicate)} .",
+            "#{marker} <weaver.markers.intValue> #{val_var} .",
+            "#{marker} <weaver.markers.object> #{obj} .",
+            ~s|#{marker} <weaver.markers.type> "chunkEnd" .|
+          ]
+
         _other ->
           []
       end)
 
     statement =
-      Enum.reduce(varnames, statements, fn {%Ref{id: id}, varname}, statements ->
-        ["uid(#{varname}) <id> #{inspect(id)} ." | statements]
+      Enum.reduce(varnames, statements, fn
+        {%Ref{id: id}, varname}, statements ->
+          ["uid(#{varname}) <id> #{inspect(id)} ." | statements]
+
+        {%ChunkStart{}, _varname}, statements ->
+          statements
+
+        {%ChunkEnd{}, _varname}, statements ->
+          statements
       end)
       |> Enum.join("\n")
 
@@ -204,32 +279,43 @@ defmodule Weaver.Graph do
   end
 
   def handle_call({:cursors, ref, predicate, opts}, _from, state) do
-    cursor_pred = "#{predicate}.cursors"
+    limit_str =
+      case Keyword.get(opts, :limit) do
+        nil -> ""
+        limit when is_integer(limit) -> " (first: #{limit})"
+      end
 
     query = ~s"""
     {
       cursors(func: eq(id, #{inspect(ref.id)})) {
-        #{cursor_pred} @facets(id, gap)
+        weaver.markers#{limit_str} @filter(eq(weaver.markers.predicate, "#{predicate}")) (orderdesc: weaver.markers.intValue, orderdesc: weaver.markers.type) {
+          weaver.markers.intValue
+          weaver.markers.object { id }
+          weaver.markers.type
+        }
       }
     }
     """
 
     result =
       case do_query(query) do
-        {:ok, %{"cursors" => [cursors]}} ->
+        {:ok, %{"cursors" => [%{"weaver.markers" => cursors}]}} ->
           cursors =
-            cursors
-            |> Map.get(cursor_pred)
-            |> Enum.reduce({[], 0}, fn val, {list, i} ->
-              gap = cursors["#{cursor_pred}|gap"][Integer.to_string(i)]
-              id = cursors["#{cursor_pred}|id"][Integer.to_string(i)]
+            Enum.map(cursors, fn
+              %{
+                "weaver.markers.intValue" => val,
+                "weaver.markers.type" => "chunkStart",
+                "weaver.markers.object" => %{"id" => id}
+              } ->
+                %ChunkStart{cursor: %Cursor{val: val, ref: %Ref{id: id}}}
 
-              cursor = Cursor.new(Ref.new(id), val, gap)
-
-              {[cursor | list], i + 1}
+              %{
+                "weaver.markers.intValue" => val,
+                "weaver.markers.type" => "chunkEnd",
+                "weaver.markers.object" => %{"id" => id}
+              } ->
+                %ChunkEnd{cursor: %Cursor{val: val, ref: %Ref{id: id}}}
             end)
-            |> elem(0)
-            |> Enum.sort_by(& &1.val, &>=/2)
             |> apply_filters(opts)
 
           {:ok, cursors}
@@ -286,7 +372,7 @@ defmodule Weaver.Graph do
 
   defp apply_filters(results, [{:less_than, val} | opts]) do
     results
-    |> Enum.filter(&(&1.val < val))
+    |> Enum.filter(&(&1.cursor.val < val))
     |> apply_filters(opts)
   end
 
@@ -312,8 +398,23 @@ defmodule Weaver.Graph do
   def upsert_query_for(varnames) do
     query_body =
       varnames
-      |> Enum.map(fn {%Ref{id: id}, var} ->
-        ~s|#{var} as var(func: eq(id, "#{id}"))|
+      |> Enum.flat_map(fn
+        {%ChunkStart{cursor: %Cursor{val: val}}, var} ->
+          [
+            ~s|q#{var}(func: eq(weaver.markers.intValue, #{val})) @filter(eq(weaver.markers.type, "chunkStart")) { #{
+              var
+            } as uid }|
+          ]
+
+        {%ChunkEnd{cursor: %Cursor{val: val}}, var} ->
+          [
+            ~s|q#{var}(func: eq(weaver.markers.intValue, #{val})) @filter(eq(weaver.markers.type, "chunkEnd")) { #{
+              var
+            } as uid }|
+          ]
+
+        {%Ref{id: id}, var} ->
+          [~s|#{var} as var(func: eq(id, "#{id}"))|]
       end)
       |> Enum.join("\n")
 
@@ -349,7 +450,11 @@ defmodule Weaver.Graph do
       {sub = %Ref{}, _pred, obj = %Ref{}} -> [sub, obj]
       {sub = %Ref{}, _pred, obj = %Ref{}, _facets} -> [sub, obj]
       {sub = %Ref{}, _pred, _obj} -> [sub]
+      {:add, sub = %Ref{}, _pred, obj = %ChunkStart{cursor: %{ref: ref}}} -> [sub, obj, ref]
+      {:add, sub = %Ref{}, _pred, obj = %ChunkEnd{cursor: %{ref: ref}}} -> [sub, obj, ref]
       {:add, sub = %Ref{}, _pred, _obj} -> [sub]
+      {:del, sub = %Ref{}, _pred, obj = %ChunkStart{cursor: %{ref: ref}}} -> [sub, obj, ref]
+      {:del, sub = %Ref{}, _pred, obj = %ChunkEnd{cursor: %{ref: ref}}} -> [sub, obj, ref]
       {:del, sub = %Ref{}, _pred, _obj} -> [sub]
       {sub = %Ref{}, _pred, _obj, _facets} -> [sub]
     end)
@@ -358,7 +463,7 @@ defmodule Weaver.Graph do
     end)
   end
 
-  defp property(ref = %Ref{}, varnames) do
+  defp property(ref = %_struct{}, varnames) do
     with {:ok, var} <- Map.fetch(varnames, ref) do
       "uid(#{var})"
     end

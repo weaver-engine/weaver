@@ -19,12 +19,13 @@ defmodule Weaver.GraphTest do
       ]
 
       meta = [
-        {:add, user1, "favorites", %Cursor{val: 140, gap: false, ref: %Ref{id: "Tweet:140"}}},
-        {:add, user1, "favorites", %Cursor{val: 134, gap: true, ref: %Ref{id: "Tweet:134"}}},
-        {:add, user1, "favorites", %Cursor{val: 34, gap: true, ref: %Ref{id: "Tweet:34"}}},
-        {:add, user1, "favorites", %Cursor{val: 4, gap: false, ref: %Ref{id: "Tweet:4"}}},
-        {:add, user1, "favorites", %Cursor{val: 3, gap: true, ref: %Ref{id: "Tweet:3"}}},
-        {:add, user1, "favorites", %Cursor{val: 1, gap: false, ref: %Ref{id: "Tweet:1"}}}
+        {:add, user1, "favorites", ChunkStart.new("Tweet:140", 140)},
+        {:add, user1, "favorites", ChunkEnd.new("Tweet:134", 134)},
+        {:add, user1, "favorites", ChunkStart.new("Tweet:34", 34)},
+        {:add, user1, "favorites", ChunkEnd.new("Tweet:34", 34)},
+        {:add, user1, "favorites", ChunkStart.new("Tweet:4", 4)},
+        {:add, user1, "favorites", ChunkEnd.new("Tweet:3", 3)},
+        {:add, user1, "favorites", ChunkStart.new("Tweet:1", 1)}
       ]
 
       store!(data, meta)
@@ -46,42 +47,37 @@ defmodule Weaver.GraphTest do
 
     test "cursors", %{user1: user1} do
       assert {:ok, [cursor1, cursor2]} = cursors(user1, "favorites", limit: 2)
-      assert cursor1 == %Cursor{val: 140, gap: false, ref: %Ref{id: "Tweet:140"}}
-      assert cursor2 == %Cursor{val: 134, gap: true, ref: %Ref{id: "Tweet:134"}}
+      assert cursor1 == ChunkStart.new("Tweet:140", 140)
+      assert cursor2 == ChunkEnd.new("Tweet:134", 134)
     end
 
     test "delete cursors", %{user1: user1} do
-      assert %{} =
-               store!([], [
-                 {:del, user1, "favorites",
-                  %Cursor{val: 140, gap: false, ref: %Ref{id: "Tweet:140"}}}
-               ])
+      assert %{} = store!([], [{:del, user1, "favorites", ChunkStart.new("Tweet:140", 140)}])
 
       assert {:ok, [cursor2]} = cursors(user1, "favorites", limit: 1)
-      assert cursor2 == %Cursor{val: 134, gap: true, ref: %Ref{id: "Tweet:134"}}
+      assert cursor2 == ChunkEnd.new("Tweet:134", 134)
     end
 
     test "delete and add same cursors", %{user1: user1} do
       assert %{} =
                store!([], [
-                 {:add, user1, "favorites",
-                  %Cursor{val: 140, gap: true, ref: %Ref{id: "Tweet:140"}}},
-                 {:del, user1, "favorites",
-                  %Cursor{val: 140, gap: false, ref: %Ref{id: "Tweet:140"}}}
+                 {:add, user1, "favorites", ChunkEnd.new("Tweet:140", 140)},
+                 {:del, user1, "favorites", ChunkStart.new("Tweet:140", 140)}
                ])
 
       assert {:ok, [cursor2]} = cursors(user1, "favorites", limit: 1)
-      assert cursor2 == %Cursor{val: 140, gap: true, ref: %Ref{id: "Tweet:140"}}
+      assert cursor2 == ChunkEnd.new("Tweet:140", 140)
     end
 
     test "cursors less_than", %{user1: user1} do
       assert {:ok, cursors} = cursors(user1, "favorites", less_than: 134)
 
       assert cursors == [
-               %Cursor{val: 34, gap: true, ref: %Ref{id: "Tweet:34"}},
-               %Cursor{val: 4, gap: false, ref: %Ref{id: "Tweet:4"}},
-               %Cursor{val: 3, gap: true, ref: %Ref{id: "Tweet:3"}},
-               %Cursor{val: 1, gap: false, ref: %Ref{id: "Tweet:1"}}
+               ChunkStart.new("Tweet:34", 34),
+               ChunkEnd.new("Tweet:34", 34),
+               ChunkStart.new("Tweet:4", 4),
+               ChunkEnd.new("Tweet:3", 3),
+               ChunkStart.new("Tweet:1", 1)
              ]
     end
   end
