@@ -27,11 +27,10 @@ defmodule Weaver do
 
   defmodule Cursor do
     @moduledoc """
-    References a position in a timeline used for resuming the
-    retrieval at a previous point if needed.
+    References a position in a timeline.
 
-    Can be stored as meta data together with the actual graph
-    data in `Weaver.Graph`.
+    Can be stored as part of a marker in the meta data
+    together with the actual graph data in `Weaver.Graph`.
     """
 
     @enforce_keys [:ref, :val]
@@ -42,8 +41,59 @@ defmodule Weaver do
             val: any()
           }
 
-    def new(ref, val, gap \\ nil) do
-      %__MODULE__{ref: ref, val: val, gap: gap}
+    def new(ref, val, gap \\ nil)
+
+    def new(ref, val, true) do
+      Weaver.Marker.ChunkEnd.new(ref, val)
+    end
+
+    def new(ref, val, _gap) do
+      Weaver.Marker.ChunkStart.new(ref, val)
+    end
+  end
+
+  defmodule Marker do
+    @moduledoc """
+    Namespace for markers in a timeline that can be stored as
+    meta data together with the actual graph data in `Weaver.Graph`.
+    """
+
+    defmodule ChunkStart do
+      @moduledoc """
+      References a position in a timeline where a chunk starts,
+      used as boundary for retrieval of new records in the timeline.
+
+      Can be stored as meta data together with the actual graph
+      data in `Weaver.Graph`.
+      """
+
+      @enforce_keys [:cursor]
+      defstruct @enforce_keys
+
+      @type t() :: %__MODULE__{cursor: Weaver.Cursor.t()}
+
+      def new(id, val) do
+        %__MODULE__{cursor: %Weaver.Cursor{ref: %Ref{id: id}, val: val}}
+      end
+    end
+
+    defmodule ChunkEnd do
+      @moduledoc """
+      References a position in a timeline used for resuming the
+      retrieval at a previous point if needed.
+
+      Can be stored as meta data together with the actual graph
+      data in `Weaver.Graph`.
+      """
+
+      @enforce_keys [:cursor]
+      defstruct @enforce_keys
+
+      @type t() :: %__MODULE__{cursor: Weaver.Cursor.t()}
+
+      def new(id, val) do
+        %__MODULE__{cursor: %Weaver.Cursor{ref: %Ref{id: id}, val: val}}
+      end
     end
   end
 

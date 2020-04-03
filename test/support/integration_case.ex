@@ -16,7 +16,7 @@ defmodule Weaver.IntegrationCase do
 
   using do
     quote location: :keep do
-      alias Weaver.{Cursor, Ref}
+      alias Weaver.{Cursor, Ref, Marker.ChunkStart, Marker.ChunkEnd}
 
       import Weaver.IntegrationCase
       import Test.Support.Factory
