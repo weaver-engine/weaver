@@ -1,4 +1,17 @@
 defmodule WeaverTest do
+  @moduledoc """
+  +-----------------------+------------------------------------+-------------------------------------+
+  |                       |      Initial cursor (refresh)      |      Trailing cursor (backfill)     |
+  |                       +--------------+---------------------+--------------+----------------------+
+  |                       | Cursor range | Singe-record cursor | Cursor range | Single-record cursor |
+  +-----------------------+--------------+---------------------+--------------+----------------------+
+  | Record added          |              |                     |              |                      |
+  +-----------------------+--------------+---------------------+--------------+----------------------+
+  | No changes            |              |                     |              |                      |
+  +-----------------------+--------------+---------------------+--------------+----------------------+
+  | Cursor record deleted |              |                     |              |                      |
+  +-----------------------+--------------+---------------------+--------------+----------------------+
+  """
   use Weaver.IntegrationCase, async: false
 
   alias Weaver.ExTwitter.Mock, as: Twitter
@@ -49,6 +62,135 @@ defmodule WeaverTest do
     test "prepare" do
       assert %Weaver.Step{} = Weaver.prepare(@query)
     end
+  end
+
+  describe "refresh: no cursor, no tweets" do
+  end
+
+  describe "refresh: no cursor, multiple tweets" do
+  end
+
+  describe "refresh: no cursor, one tweet" do
+  end
+
+  describe "refresh: single-tweet cursor, no tweets" do
+  end
+
+  describe "refresh: single-tweet cursor, tweet unchanged" do
+  end
+
+  describe "refresh: single-tweet cursor, tweets added" do
+  end
+
+  describe "refresh: single-tweet cursor, tweet deleted" do
+  end
+
+  describe "refresh: range cursor, no tweets" do
+  end
+
+  describe "refresh: range cursor, tweets unchanged" do
+  end
+
+  describe "refresh: range cursor, tweets added" do
+  end
+
+  describe "refresh: range cursor, tweets deleted, none of cursor remaining" do
+  end
+
+  describe "refresh: range cursor, tweets deleted, multiple of cursor remaining" do
+  end
+
+  describe "refresh: range cursor, tweets deleted, one of cursor remaining" do
+  end
+
+  describe "backfill: single-tweet cursor, no gap cursor, no tweets" do
+  end
+
+  describe "backfill: single-tweet cursor, no gap cursor, multiple tweets" do
+  end
+
+  describe "backfill: single-tweet cursor, no gap cursor, one tweet" do
+  end
+
+  describe "backfill: single-tweet cursor, single-tweet gap cursor, no tweets" do
+  end
+
+  describe "backfill: single-tweet cursor, single-tweet gap cursor, gap closed" do
+  end
+
+  describe "backfill: single-tweet cursor, single-tweet gap cursor, tweets added, gap closed" do
+  end
+
+  describe "backfill: single-tweet cursor, single-tweet gap cursor, tweets added, gap not closed" do
+  end
+
+  describe "backfill: single-tweet cursor, single-tweet gap cursor, tweet deleted" do
+  end
+
+  describe "backfill: single-tweet cursor, range gap cursor, no tweets" do
+  end
+
+  describe "backfill: single-tweet cursor, range gap cursor, gap closed" do
+  end
+
+  describe "backfill: single-tweet cursor, range gap cursor, tweets added, gap closed" do
+  end
+
+  describe "backfill: single-tweet cursor, range gap cursor, tweets added, gap not closed" do
+  end
+
+  describe "backfill: single-tweet cursor, range gap cursor, tweets deleted, none of gap cursor remaining" do
+  end
+
+  describe "backfill: single-tweet cursor, range gap cursor, tweets deleted, multiple of gap cursor remaining" do
+  end
+
+  describe "backfill: single-tweet cursor, range gap cursor, tweets deleted, one of gap cursor remaining" do
+  end
+
+  describe "backfill: range cursor, no gap cursor, no tweets" do
+  end
+
+  describe "backfill: range cursor, no gap cursor, multiple tweets" do
+  end
+
+  describe "backfill: range cursor, no gap cursor, one tweet" do
+  end
+
+  describe "backfill: range cursor, single-tweet gap cursor, no tweets" do
+  end
+
+  describe "backfill: range cursor, single-tweet gap cursor, gap closed" do
+  end
+
+  describe "backfill: range cursor, single-tweet gap cursor, tweets added, gap closed" do
+  end
+
+  describe "backfill: range cursor, single-tweet gap cursor, tweets added, gap not closed" do
+  end
+
+  describe "backfill: range cursor, single-tweet gap cursor, tweet deleted" do
+  end
+
+  describe "backfill: range cursor, range gap cursor, no tweets" do
+  end
+
+  describe "backfill: range cursor, range gap cursor, gap closed" do
+  end
+
+  describe "backfill: range cursor, range gap cursor, tweets added, gap closed" do
+  end
+
+  describe "backfill: range cursor, range gap cursor, tweets added, gap not closed" do
+  end
+
+  describe "backfill: range cursor, range gap cursor, tweets deleted, none of gap cursor remaining" do
+  end
+
+  describe "backfill: range cursor, range gap cursor, tweets deleted, multiple of gap cursor remaining" do
+  end
+
+  describe "backfill: range cursor, range gap cursor, tweets deleted, one of gap cursor remaining" do
   end
 
   describe "without gaps" do
@@ -283,6 +425,53 @@ defmodule WeaverTest do
     end
   end
 
+  describe "initial single-record cursor" do
+    setup :use_graph
+
+    setup do
+      user = build(ExTwitter.Model.User, screen_name: "elixirdigest")
+      favorites = build(ExTwitter.Model.Tweet, 20, fn i -> [id: 21 - i] end)
+
+      meta = [
+        {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         %Cursor{val: 20, gap: true, ref: %Ref{id: "Tweet:20"}}},
+        {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         %Cursor{val: 16, gap: false, ref: %Ref{id: "Tweet:16"}}}
+      ]
+
+      Weaver.Graph.store!([], meta)
+
+      {:ok, user: user, favorites: favorites}
+    end
+
+    test "Refresh, record added", %{user: user, favorites: favorites} do
+      [fav21 | _] = favorites
+
+      @query
+      |> Weaver.prepare(cache: Weaver.Graph)
+      |> weave_initial(Twitter, :user, fn "elixirdigest" -> user end)
+
+      # favorites initial
+      |> weave_dispatched(Twitter, :favorites, twitter_mock_for(user, favorites))
+      |> assert_has_data([
+        {%Ref{id: "TwitterUser:elixirdigest"}, "favorites", %Ref{id: "Tweet:#{fav21.id}"}},
+        {%Ref{id: "Tweet:#{fav21.id}"}, "text", fav21.full_text}
+      ])
+      |> assert_meta([
+        {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         %Cursor{val: 21, gap: false, ref: %Ref{id: "Tweet:21"}}}
+      ])
+      |> assert_dispatched([
+        %{data: ^fav21, ast: {:dispatched, {:field, {:name, _, "retweets"}, _, _, _, _, _}}}
+      ])
+      |> assert_next(%{
+        ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
+        cursor: %Cursor{val: 20, gap: true, ref: %Ref{id: "Tweet:20"}},
+        gap: :not_loaded
+      })
+    end
+  end
+
   describe "deleted tweets" do
     setup :use_graph
 
@@ -310,7 +499,7 @@ defmodule WeaverTest do
       {:ok, user: user, favorites: favorites}
     end
 
-    test "works with deleted gap tweet", %{user: user, favorites: favorites} do
+    test "works with deleted initial gap tweet", %{user: user, favorites: favorites} do
       [fav21, fav20 | _] = favorites
 
       @query
@@ -343,7 +532,7 @@ defmodule WeaverTest do
       ])
     end
 
-    test "deletes remaining cursors with deleted remaining tweets", %{
+    test "deletes remaining cursors with deleted remaining tweets (refresh)", %{
       user: user,
       favorites: favorites
     } do
@@ -394,7 +583,7 @@ defmodule WeaverTest do
       |> refute_next()
     end
 
-    test "deletes remaining cursors with deleted remaining tweets2", %{
+    test "deletes remaining cursors with deleted remaining tweets (backfill, gap cursor)", %{
       user: user,
       favorites: favorites
     } do
