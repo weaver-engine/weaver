@@ -3,15 +3,19 @@ defmodule Weaver.GraphTest do
 
   doctest Weaver.Graph
 
+  import Weaver.Graph, only: [store!: 2, query: 1, cursors: 2, cursors: 3]
+
+  setup :use_graph
+
+  setup do
+    user1 = %Ref{id: "TwitterUser:elixirdigest"}
+    user2 = %Ref{id: "TwitterUser:elixirlang"}
+
+    {:ok, user1: user1, user2: user2}
+  end
+
   describe "data integrity" do
-    import Weaver.Graph, only: [store!: 2, query: 1, cursors: 3]
-
-    setup :use_graph
-
-    setup do
-      user1 = %Ref{id: "TwitterUser:elixirdigest"}
-      user2 = %Ref{id: "TwitterUser:elixirlang"}
-
+    setup %{user1: user1, user2: user2} do
       data = [
         {user1, "screenName", "elixirdigest"},
         {user1, "follows", user2},
@@ -30,7 +34,7 @@ defmodule Weaver.GraphTest do
 
       store!(data, meta)
 
-      {:ok, user1: user1}
+      :ok
     end
 
     test "data" do
@@ -85,6 +89,12 @@ defmodule Weaver.GraphTest do
       assert {:ok, cursors} = cursors(user1, "favorites", less_than: 134, limit: 1)
 
       assert cursors == [Marker.chunk_start("Tweet:34", 34)]
+    end
+  end
+
+  describe "no markers" do
+    test "returns empty list", %{user1: user1} do
+      assert {:ok, []} = cursors(user1, "favorites")
     end
   end
 end
