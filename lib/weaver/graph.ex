@@ -272,6 +272,9 @@ defmodule Weaver.Graph do
 
     result =
       case do_query(query) do
+        {:ok, %{"cursors" => []}} ->
+          {:ok, []}
+
         {:ok, %{"cursors" => [%{"weaver.markers" => cursors}]}} ->
           cursors =
             Enum.map(cursors, fn
