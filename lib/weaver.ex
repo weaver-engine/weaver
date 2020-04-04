@@ -44,56 +44,38 @@ defmodule Weaver do
     def new(ref, val, gap \\ nil)
 
     def new(ref, val, true) do
-      Weaver.Marker.ChunkEnd.new(ref, val)
+      Weaver.Marker.chunk_end(ref, val)
     end
 
     def new(ref, val, _gap) do
-      Weaver.Marker.ChunkStart.new(ref, val)
+      Weaver.Marker.chunk_start(ref, val)
     end
   end
 
   defmodule Marker do
     @moduledoc """
-    Namespace for markers in a timeline that can be stored as
-    meta data together with the actual graph data in `Weaver.Graph`.
+    References a position in a timeline where a chunk of previously
+    retrieved data starts or ends, used as boundaries for retrieval
+    of new records in the timeline.
+
+    Can be stored as meta data together with the actual graph
+    data in `Weaver.Graph`.
     """
 
-    defmodule ChunkStart do
-      @moduledoc """
-      References a position in a timeline where a chunk starts,
-      used as boundary for retrieval of new records in the timeline.
+    @enforce_keys [:cursor, :type]
+    defstruct @enforce_keys
 
-      Can be stored as meta data together with the actual graph
-      data in `Weaver.Graph`.
-      """
+    @type t() :: %__MODULE__{
+            cursor: Weaver.Cursor.t(),
+            type: :chunk_start | :chunk_end
+          }
 
-      @enforce_keys [:cursor]
-      defstruct @enforce_keys
-
-      @type t() :: %__MODULE__{cursor: Weaver.Cursor.t()}
-
-      def new(id, val) do
-        %__MODULE__{cursor: %Weaver.Cursor{ref: %Ref{id: id}, val: val}}
-      end
+    def chunk_start(id, val) do
+      %__MODULE__{type: :chunk_start, cursor: %Weaver.Cursor{ref: %Ref{id: id}, val: val}}
     end
 
-    defmodule ChunkEnd do
-      @moduledoc """
-      References a position in a timeline used for resuming the
-      retrieval at a previous point if needed.
-
-      Can be stored as meta data together with the actual graph
-      data in `Weaver.Graph`.
-      """
-
-      @enforce_keys [:cursor]
-      defstruct @enforce_keys
-
-      @type t() :: %__MODULE__{cursor: Weaver.Cursor.t()}
-
-      def new(id, val) do
-        %__MODULE__{cursor: %Weaver.Cursor{ref: %Ref{id: id}, val: val}}
-      end
+    def chunk_end(id, val) do
+      %__MODULE__{type: :chunk_end, cursor: %Weaver.Cursor{ref: %Ref{id: id}, val: val}}
     end
   end
 
