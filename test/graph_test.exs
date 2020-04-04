@@ -80,5 +80,11 @@ defmodule Weaver.GraphTest do
                Marker.chunk_start("Tweet:1", 1)
              ]
     end
+
+    test "cursors less_than + limit", %{user1: user1} do
+      assert {:ok, cursors} = cursors(user1, "favorites", less_than: 134, limit: 1)
+
+      assert cursors == [Marker.chunk_start("Tweet:34", 34)]
+    end
   end
 end

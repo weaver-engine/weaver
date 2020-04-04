@@ -243,13 +243,25 @@ defmodule Weaver.Graph do
     limit_str =
       case Keyword.get(opts, :limit) do
         nil -> ""
-        limit when is_integer(limit) -> " (first: #{limit})"
+        limit when is_integer(limit) -> ", first: #{limit}"
       end
+
+    filters =
+      Enum.flat_map(opts, fn
+        {:less_than, val} -> ["lt(weaver.markers.intValue, #{val})"]
+        _else -> []
+      end)
+
+    filters = [~s|eq(weaver.markers.predicate, "#{predicate}")| | filters]
+
+    filters_str = Enum.join(filters, " AND ")
 
     query = ~s"""
     {
       cursors(func: eq(id, #{inspect(ref.id)})) {
-        weaver.markers#{limit_str} @filter(eq(weaver.markers.predicate, "#{predicate}")) (orderdesc: weaver.markers.intValue, orderdesc: weaver.markers.type) {
+        weaver.markers @filter(#{filters_str}) (orderdesc: weaver.markers.intValue, orderdesc: weaver.markers.type#{
+      limit_str
+    }) {
           weaver.markers.intValue
           weaver.markers.object { id }
           weaver.markers.type
@@ -273,7 +285,6 @@ defmodule Weaver.Graph do
                   cursor: %Cursor{val: val, ref: %Ref{id: id}}
                 }
             end)
-            |> apply_filters(opts)
 
           {:ok, cursors}
 
@@ -317,20 +328,6 @@ defmodule Weaver.Graph do
     result = do_query(query)
 
     {:reply, result, %{}}
-  end
-
-  defp apply_filters(results, []), do: results
-
-  defp apply_filters(results, [{:limit, count} | opts]) do
-    results
-    |> Enum.take(count)
-    |> apply_filters(opts)
-  end
-
-  defp apply_filters(results, [{:less_than, val} | opts]) do
-    results
-    |> Enum.filter(&(&1.cursor.val < val))
-    |> apply_filters(opts)
   end
 
   defp do_query(query) do
