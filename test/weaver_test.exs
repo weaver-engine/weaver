@@ -1,16 +1,18 @@
 defmodule WeaverTest do
   @moduledoc """
-  +-----------------------+------------------------------------+-------------------------------------+
-  |                       |      Initial cursor (refresh)      |      Trailing cursor (backfill)     |
-  |                       +--------------+---------------------+--------------+----------------------+
-  |                       | Cursor range | Singe-record cursor | Cursor range | Single-record cursor |
-  +-----------------------+--------------+---------------------+--------------+----------------------+
-  | Record added          |              |                     |              |                      |
-  +-----------------------+--------------+---------------------+--------------+----------------------+
-  | No changes            |              |                     |              |                      |
-  +-----------------------+--------------+---------------------+--------------+----------------------+
-  | Cursor record deleted |              |                     |              |                      |
-  +-----------------------+--------------+---------------------+--------------+----------------------+
+  +-----------------------+-----------------------------------------------+----------------------------------------+
+  |                       |            Initial cursor (refresh)           |       Trailing cursor (backfill)       |
+  |                       +-------------------------+---------------------+--------------+-------------------------+
+  |                       |       Cursor range      | Singe-record cursor | Cursor range |   Single-record cursor  |
+  +-----------------------+-------------------------+---------------------+--------------+-------------------------+
+  | Record added          | "with gaps" initial     |                     |              |                         |
+  +-----------------------+-------------------------+---------------------+--------------+-------------------------+
+  | No changes            |                         |                     |              |                         |
+  +-----------------------+-------------------------+---------------------+--------------+-------------------------+
+  | Cursor record deleted | "deleted tweets" test 1 |                     |              | "deleted tweets" test 3 |
+  +-----------------------+-------------------------+---------------------+--------------+-------------------------+
+  | All records deleted   |                               "deleted tweets" last test                               |
+  +-----------------------+----------------------------------------------------------------------------------------+
   """
   use Weaver.IntegrationCase, async: false
 
@@ -193,7 +195,7 @@ defmodule WeaverTest do
   describe "backfill: range cursor, range gap cursor, tweets deleted, one of gap cursor remaining" do
   end
 
-  describe "without gaps" do
+  describe "without markers" do
     setup do
       user = build(ExTwitter.Model.User, screen_name: "elixirdigest")
       favorites = build(ExTwitter.Model.Tweet, 10, fn i -> [id: 11 - i] end)
@@ -234,13 +236,13 @@ defmodule WeaverTest do
       ])
       |> assert_meta([
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 11, gap: false, ref: %Ref{id: "Tweet:11"}}},
+         Marker.chunk_start("Tweet:11", 11)},
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 10, gap: true, ref: %Ref{id: "Tweet:10"}}}
+         Marker.chunk_end("Tweet:10", 10)}
       ])
       |> assert_next(%{
         ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
-        cursor: %Cursor{val: 10},
+        cursor: %Marker{type: :chunk_end, cursor: %Cursor{ref: %Ref{id: "Tweet:10"}, val: 10}},
         gap: nil
       })
       |> assert_dispatched([
@@ -258,13 +260,12 @@ defmodule WeaverTest do
       ])
       |> assert_meta([
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 10, gap: true, ref: %Ref{id: "Tweet:10"}}},
-        {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 8, gap: true, ref: %Ref{id: "Tweet:8"}}}
+         Marker.chunk_end("Tweet:10", 10)},
+        {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites", Marker.chunk_end("Tweet:8", 8)}
       ])
       |> assert_next(%{
         ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
-        cursor: %Cursor{val: 8}
+        cursor: %Marker{type: :chunk_end, cursor: %Cursor{ref: %Ref{id: "Tweet:8"}, val: 8}}
       })
       |> assert_dispatched([
         %{data: ^fav8, ast: {:dispatched, {:field, {:name, _, "retweets"}, _, _, _, _, _}}},
@@ -273,7 +274,7 @@ defmodule WeaverTest do
     end
   end
 
-  describe "with gaps" do
+  describe "with markers" do
     setup :use_graph
 
     setup do
@@ -282,17 +283,18 @@ defmodule WeaverTest do
 
       meta = [
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 20, gap: false, ref: %Ref{id: "Tweet:20"}}},
+         Marker.chunk_start("Tweet:20", 20)},
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 16, gap: true, ref: %Ref{id: "Tweet:16"}}},
+         Marker.chunk_end("Tweet:16", 16)},
+        # {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+        # Marker.chunk_start("Tweet:12", 12)},
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 12, gap: true, ref: %Ref{id: "Tweet:12"}}},
+         Marker.chunk_end("Tweet:12", 12)},
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 10, gap: false, ref: %Ref{id: "Tweet:10"}}},
+         Marker.chunk_start("Tweet:10", 10)},
+        {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites", Marker.chunk_end("Tweet:8", 8)},
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 8, gap: true, ref: %Ref{id: "Tweet:8"}}},
-        {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 7, gap: false, ref: %Ref{id: "Tweet:7"}}}
+         Marker.chunk_start("Tweet:7", 7)}
       ]
 
       Weaver.Graph.store!([], meta)
@@ -328,9 +330,9 @@ defmodule WeaverTest do
       ])
       |> assert_meta([
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 21, gap: false, ref: %Ref{id: "Tweet:21"}}},
+         Marker.chunk_start("Tweet:21", 21)},
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 20, gap: false, ref: %Ref{id: "Tweet:20"}}}
+         Marker.chunk_start("Tweet:20", 20)}
       ])
       |> assert_dispatched([
         %{data: ^fav21, ast: {:dispatched, {:field, {:name, _, "retweets"}, _, _, _, _, _}}}
@@ -351,13 +353,13 @@ defmodule WeaverTest do
       ])
       |> assert_meta([
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 16, gap: true, ref: %Ref{id: "Tweet:16"}}},
+         Marker.chunk_end("Tweet:16", 16)},
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 14, gap: true, ref: %Ref{id: "Tweet:14"}}}
+         Marker.chunk_end("Tweet:14", 14)}
       ])
       |> assert_next(%{
         ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
-        cursor: %Cursor{val: 14}
+        cursor: %Marker{type: :chunk_end, cursor: %Cursor{ref: %Ref{id: "Tweet:14"}, val: 14}}
       })
       |> assert_dispatched([
         %{data: ^fav14, ast: {:dispatched, {:field, {:name, _, "retweets"}, _, _, _, _, _}}},
@@ -372,11 +374,13 @@ defmodule WeaverTest do
       ])
       |> assert_meta([
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 14, gap: true, ref: %Ref{id: "Tweet:14"}}}
+         Marker.chunk_end("Tweet:14", 14)}
+        # {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+        # Marker.chunk_start("Tweet:12", 12)}
       ])
       |> assert_next(%{
         ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
-        cursor: %Cursor{val: 12}
+        cursor: %Marker{type: :chunk_end, cursor: %Cursor{ref: %Ref{id: "Tweet:12"}, val: 12}}
       })
       |> assert_dispatched([
         %{data: ^fav13, ast: {:dispatched, {:field, {:name, _, "retweets"}, _, _, _, _, _}}}
@@ -390,13 +394,13 @@ defmodule WeaverTest do
       ])
       |> assert_meta([
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 12, gap: true, ref: %Ref{id: "Tweet:12"}}},
+         Marker.chunk_end("Tweet:12", 12)},
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 10, gap: false, ref: %Ref{id: "Tweet:10"}}}
+         Marker.chunk_start("Tweet:10", 10)}
       ])
       |> assert_next(%{
         ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
-        cursor: %Cursor{val: 12},
+        cursor: %Marker{type: :chunk_end, cursor: %Cursor{ref: %Ref{id: "Tweet:12"}, val: 12}},
         gap: :not_loaded
       })
       |> assert_dispatched([
@@ -408,14 +412,13 @@ defmodule WeaverTest do
       |> assert_data([])
       |> assert_dispatched([])
       |> assert_meta([
+        {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites", Marker.chunk_end("Tweet:8", 8)},
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 8, gap: true, ref: %Ref{id: "Tweet:8"}}},
-        {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 7, gap: false, ref: %Ref{id: "Tweet:7"}}}
+         Marker.chunk_start("Tweet:7", 7)}
       ])
       |> assert_next(%{
         ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
-        cursor: %Cursor{val: 8},
+        cursor: %Marker{type: :chunk_end, cursor: %Cursor{ref: %Ref{id: "Tweet:8"}, val: 8}},
         gap: :not_loaded
       })
 
@@ -433,10 +436,12 @@ defmodule WeaverTest do
       favorites = build(ExTwitter.Model.Tweet, 20, fn i -> [id: 21 - i] end)
 
       meta = [
+        # {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+        # Marker.chunk_start("Tweet:20", 20)},
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 20, gap: true, ref: %Ref{id: "Tweet:20"}}},
+         Marker.chunk_end("Tweet:20", 20)},
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 16, gap: false, ref: %Ref{id: "Tweet:16"}}}
+         Marker.chunk_start("Tweet:16", 16)}
       ]
 
       Weaver.Graph.store!([], meta)
@@ -459,14 +464,16 @@ defmodule WeaverTest do
       ])
       |> assert_meta([
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 21, gap: false, ref: %Ref{id: "Tweet:21"}}}
+         Marker.chunk_start("Tweet:21", 21)}
+        # {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+        # Marker.chunk_start("Tweet:20", 20)}
       ])
       |> assert_dispatched([
         %{data: ^fav21, ast: {:dispatched, {:field, {:name, _, "retweets"}, _, _, _, _, _}}}
       ])
       |> assert_next(%{
         ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
-        cursor: %Cursor{val: 20, gap: true, ref: %Ref{id: "Tweet:20"}},
+        cursor: %Marker{type: :chunk_end, cursor: %Cursor{val: 20, ref: %Ref{id: "Tweet:20"}}},
         gap: :not_loaded
       })
     end
@@ -481,17 +488,18 @@ defmodule WeaverTest do
 
       meta = [
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 20, gap: false, ref: %Ref{id: "Tweet:20"}}},
+         Marker.chunk_start("Tweet:20", 20)},
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 16, gap: true, ref: %Ref{id: "Tweet:16"}}},
+         Marker.chunk_end("Tweet:16", 16)},
+        # {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+        # Marker.chunk_start("Tweet:12", 12)},
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 12, gap: true, ref: %Ref{id: "Tweet:12"}}},
+         Marker.chunk_end("Tweet:12", 12)},
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 10, gap: false, ref: %Ref{id: "Tweet:10"}}},
+         Marker.chunk_start("Tweet:10", 10)},
+        {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites", Marker.chunk_end("Tweet:8", 8)},
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 8, gap: true, ref: %Ref{id: "Tweet:8"}}},
-        {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 7, gap: false, ref: %Ref{id: "Tweet:7"}}}
+         Marker.chunk_start("Tweet:7", 7)}
       ]
 
       Weaver.Graph.store!([], meta)
@@ -526,9 +534,9 @@ defmodule WeaverTest do
       ])
       |> assert_meta([
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 21, gap: false, ref: %Ref{id: "Tweet:21"}}},
+         Marker.chunk_start("Tweet:21", 21)},
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 20, gap: false, ref: %Ref{id: "Tweet:20"}}}
+         Marker.chunk_start("Tweet:20", 20)}
       ])
     end
 
@@ -555,7 +563,7 @@ defmodule WeaverTest do
       ])
       |> assert_meta([
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 21, gap: true, ref: %Ref{id: "Tweet:21"}}}
+         Marker.chunk_end("Tweet:21", 21)}
       ])
       |> weave_next(
         Twitter,
@@ -564,21 +572,22 @@ defmodule WeaverTest do
       )
       |> assert_meta([
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 21, gap: true, ref: %Ref{id: "Tweet:21"}}},
+         Marker.chunk_end("Tweet:21", 21)},
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 21, gap: false, ref: %Ref{id: "Tweet:21"}}},
+         Marker.chunk_start("Tweet:21", 21)},
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 20, gap: false, ref: %Ref{id: "Tweet:20"}}},
+         Marker.chunk_start("Tweet:20", 20)},
+        # {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+        # Marker.chunk_start("Tweet:16", 16)},
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 16, gap: true, ref: %Ref{id: "Tweet:16"}}},
+         Marker.chunk_end("Tweet:16", 16)},
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 12, gap: true, ref: %Ref{id: "Tweet:12"}}},
+         Marker.chunk_end("Tweet:12", 12)},
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 10, gap: false, ref: %Ref{id: "Tweet:10"}}},
+         Marker.chunk_start("Tweet:10", 10)},
+        {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites", Marker.chunk_end("Tweet:8", 8)},
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 8, gap: true, ref: %Ref{id: "Tweet:8"}}},
-        {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 7, gap: false, ref: %Ref{id: "Tweet:7"}}}
+         Marker.chunk_start("Tweet:7", 7)}
       ])
       |> refute_next()
     end
@@ -605,26 +614,25 @@ defmodule WeaverTest do
       ])
       |> assert_meta([
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 16, gap: true, ref: %Ref{id: "Tweet:16"}}},
+         Marker.chunk_end("Tweet:16", 16)},
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 15, gap: true, ref: %Ref{id: "Tweet:15"}}}
+         Marker.chunk_end("Tweet:15", 15)}
       ])
 
       # favorites last pt.
       |> weave_next(Twitter, :favorites, twitter_mock_for(user, favorites, max_id: 14))
       |> assert_meta([
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 15, gap: true, ref: %Ref{id: "Tweet:15"}}},
+         Marker.chunk_end("Tweet:15", 15)},
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 15, gap: false, ref: %Ref{id: "Tweet:15"}}},
+         Marker.chunk_start("Tweet:15", 15)},
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 12, gap: true, ref: %Ref{id: "Tweet:12"}}},
+         Marker.chunk_end("Tweet:12", 12)},
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 10, gap: false, ref: %Ref{id: "Tweet:10"}}},
+         Marker.chunk_start("Tweet:10", 10)},
+        {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites", Marker.chunk_end("Tweet:8", 8)},
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 8, gap: true, ref: %Ref{id: "Tweet:8"}}},
-        {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 7, gap: false, ref: %Ref{id: "Tweet:7"}}}
+         Marker.chunk_start("Tweet:7", 7)}
       ])
       |> refute_next()
     end
@@ -639,17 +647,18 @@ defmodule WeaverTest do
       |> assert_data([])
       |> assert_meta([
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 20, gap: false, ref: %Ref{id: "Tweet:20"}}},
+         Marker.chunk_start("Tweet:20", 20)},
+        # {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+        # Marker.chunk_start("Tweet:16", 16)},
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 16, gap: true, ref: %Ref{id: "Tweet:16"}}},
+         Marker.chunk_end("Tweet:16", 16)},
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 12, gap: true, ref: %Ref{id: "Tweet:12"}}},
+         Marker.chunk_end("Tweet:12", 12)},
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 10, gap: false, ref: %Ref{id: "Tweet:10"}}},
+         Marker.chunk_start("Tweet:10", 10)},
+        {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites", Marker.chunk_end("Tweet:8", 8)},
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 8, gap: true, ref: %Ref{id: "Tweet:8"}}},
-        {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         %Cursor{val: 7, gap: false, ref: %Ref{id: "Tweet:7"}}}
+         Marker.chunk_start("Tweet:7", 7)}
       ])
       |> refute_next()
     end

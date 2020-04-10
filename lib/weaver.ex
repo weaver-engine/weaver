@@ -21,7 +21,7 @@ defmodule Weaver do
             id: String.t()
           }
 
-    def new(id), do: %__MODULE__{id: id}
+    def new(id) when is_binary(id), do: %__MODULE__{id: id}
     def from(obj), do: new(Weaver.Resolvers.id_for(obj))
   end
 
@@ -44,11 +44,11 @@ defmodule Weaver do
     def new(ref, val, gap \\ nil)
 
     def new(ref, val, true) do
-      Weaver.Marker.chunk_end(ref, val)
+      Weaver.Marker.chunk_end(ref.id, val)
     end
 
     def new(ref, val, _gap) do
-      Weaver.Marker.chunk_start(ref, val)
+      Weaver.Marker.chunk_start(ref.id, val)
     end
   end
 
@@ -77,6 +77,10 @@ defmodule Weaver do
     def chunk_end(id, val) do
       %__MODULE__{type: :chunk_end, cursor: %Weaver.Cursor{ref: %Ref{id: id}, val: val}}
     end
+
+    def from_cursor(%Cursor{val: val, gap: true, ref: %Ref{id: id}}), do: chunk_end(id, val)
+    def from_cursor(%Cursor{val: val, ref: %Ref{id: id}}), do: chunk_start(id, val)
+    def from_cursor(marker = %Marker{}), do: marker
   end
 
   def prepare(query, opts \\ []) do

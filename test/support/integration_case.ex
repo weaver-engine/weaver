@@ -25,7 +25,7 @@ defmodule Weaver.IntegrationCase do
     end
   end
 
-  alias Weaver.Step.Result
+  alias Weaver.{Cursor, Marker, Step.Result}
 
   def use_graph(_context) do
     Weaver.Graph.reset!()
@@ -121,7 +121,7 @@ defmodule Weaver.IntegrationCase do
   defmacro assert_meta(result_expr, match_expr) do
     quote do
       result = unquote(result_expr)
-      assert unquote(match_expr) = Result.meta(result)
+      assert unquote(match_expr) == Result.meta(result)
 
       result
     end
