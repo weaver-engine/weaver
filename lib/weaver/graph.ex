@@ -43,12 +43,8 @@ defmodule Weaver.Graph do
     end)
 
     Enum.each(meta, fn
-      {op, %Ref{}, pred, %Cursor{}}
-      when op in [:add, :del] and (is_binary(pred) or is_atom(pred)) ->
-        :ok
-
-      {op, %Ref{}, pred, %Marker{}}
-      when op in [:add, :del] and (is_binary(pred) or is_atom(pred)) ->
+      {op, %Ref{}, pred, %Marker{cursor: %Cursor{ref: %Ref{id: id}, val: val}}}
+      when op in [:add, :del] and is_binary(pred) and is_binary(id) and is_integer(val) ->
         :ok
 
       other ->
@@ -125,16 +121,21 @@ defmodule Weaver.Graph do
     statements =
       tuples
       |> Enum.flat_map(fn
-        {:add, subject, predicate, %Cursor{val: val, gap: gap, ref: %{id: id}}} ->
-          sub = property(subject, varnames)
-          obj = property(val, varnames)
+        {:add, subject, predicate, cursor = %Cursor{}} ->
+          marker = Marker.from_cursor(cursor)
+          sub_var = property(subject, varnames)
+          ref_var = property(marker.cursor.ref, varnames)
+          val_var = property(marker.cursor.val, varnames)
+          marker_var = property(marker, varnames)
+          type_str = marker_type_str(marker.type)
 
-          facets =
-            %{gap: gap, id: id}
-            |> Enum.map(fn {k, v} -> "#{k} = #{property(v, varnames)}" end)
-            |> Enum.join(", ")
-
-          ["#{sub} <#{predicate}.cursors> #{obj} (#{facets}) ."]
+          [
+            "#{sub_var} <weaver.markers> #{marker_var} .",
+            "#{marker_var} <weaver.markers.predicate> #{inspect(predicate)} .",
+            "#{marker_var} <weaver.markers.intValue> #{val_var} .",
+            "#{marker_var} <weaver.markers.object> #{ref_var} .",
+            ~s|#{marker_var} <weaver.markers.type> "#{type_str}" .|
+          ]
 
         {:add, subject, predicate, marker = %Marker{}} ->
           sub_var = property(subject, varnames)
