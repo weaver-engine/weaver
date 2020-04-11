@@ -25,33 +25,6 @@ defmodule Weaver do
     def from(obj), do: new(Weaver.Resolvers.id_for(obj))
   end
 
-  defmodule Cursor do
-    @moduledoc """
-    References a position in a timeline.
-
-    Can be stored as part of a marker in the meta data
-    together with the actual graph data in `Weaver.Graph`.
-    """
-
-    @enforce_keys [:ref, :val]
-    defstruct @enforce_keys ++ [:gap]
-
-    @type t() :: %__MODULE__{
-            ref: any(),
-            val: any()
-          }
-
-    def new(ref, val, gap \\ nil)
-
-    def new(ref, val, true) do
-      Weaver.Marker.chunk_end(ref.id, val)
-    end
-
-    def new(ref, val, _gap) do
-      Weaver.Marker.chunk_start(ref.id, val)
-    end
-  end
-
   defmodule Marker do
     @moduledoc """
     References a position in a timeline where a chunk of previously
@@ -62,25 +35,22 @@ defmodule Weaver do
     data in `Weaver.Graph`.
     """
 
-    @enforce_keys [:cursor, :type]
+    @enforce_keys [:type, :ref, :val]
     defstruct @enforce_keys
 
     @type t() :: %__MODULE__{
-            cursor: Weaver.Cursor.t(),
+            ref: any(),
+            val: any(),
             type: :chunk_start | :chunk_end
           }
 
     def chunk_start(id, val) do
-      %__MODULE__{type: :chunk_start, cursor: %Weaver.Cursor{ref: %Ref{id: id}, val: val}}
+      %__MODULE__{type: :chunk_start, ref: %Ref{id: id}, val: val}
     end
 
     def chunk_end(id, val) do
-      %__MODULE__{type: :chunk_end, cursor: %Weaver.Cursor{ref: %Ref{id: id}, val: val}}
+      %__MODULE__{type: :chunk_end, ref: %Ref{id: id}, val: val}
     end
-
-    def from_cursor(%Cursor{val: val, gap: true, ref: %Ref{id: id}}), do: chunk_end(id, val)
-    def from_cursor(%Cursor{val: val, ref: %Ref{id: id}}), do: chunk_start(id, val)
-    def from_cursor(marker = %Marker{}), do: marker
   end
 
   def prepare(query, opts \\ []) do

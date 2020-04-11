@@ -16,7 +16,7 @@ defmodule Weaver.IntegrationCase do
 
   using do
     quote location: :keep do
-      alias Weaver.{Cursor, Marker, Ref}
+      alias Weaver.{Marker, Ref}
 
       import Weaver.IntegrationCase
       import Test.Support.Factory
@@ -25,7 +25,7 @@ defmodule Weaver.IntegrationCase do
     end
   end
 
-  alias Weaver.{Cursor, Marker, Step.Result}
+  alias Weaver.{Marker, Step.Result}
 
   def use_graph(_context) do
     Weaver.Graph.reset!()
