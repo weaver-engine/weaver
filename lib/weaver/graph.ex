@@ -1,11 +1,11 @@
 defmodule Weaver.Graph do
   @moduledoc """
-  Stores edges and cursors in the dgraph graph database using the `dlex` client library.
+  Stores edges and markers in the dgraph graph database using the `dlex` client library.
   """
 
   use GenServer
 
-  alias Weaver.{Cursor, Marker, Ref, Store}
+  alias Weaver.{Marker, Ref, Store}
 
   @behaviour Store
 
@@ -24,6 +24,7 @@ defmodule Weaver.Graph do
   end
 
   @impl Store
+  # credo:disable-for-next-line Credo.Check.Refactor.CyclomaticComplexity
   def store(data, meta) do
     Enum.each(data, fn
       {%Ref{}, pred, %Ref{}} when is_binary(pred) or is_atom(pred) ->
@@ -43,7 +44,7 @@ defmodule Weaver.Graph do
     end)
 
     Enum.each(meta, fn
-      {op, %Ref{}, pred, %Marker{cursor: %Cursor{ref: %Ref{id: id}, val: val}}}
+      {op, %Ref{}, pred, %Marker{ref: %Ref{id: id}, val: val}}
       when op in [:add, :del] and is_binary(pred) and is_binary(id) and is_integer(val) ->
         :ok
 
@@ -64,12 +65,12 @@ defmodule Weaver.Graph do
   end
 
   @impl Store
-  def cursors(ref, predicate, opts \\ []) do
-    GenServer.call(__MODULE__, {:cursors, ref, predicate, opts}, @call_timeout)
+  def markers(ref, predicate, opts \\ []) do
+    GenServer.call(__MODULE__, {:markers, ref, predicate, opts}, @call_timeout)
   end
 
-  def cursors!(ref, predicate, opts \\ []) do
-    case cursors(ref, predicate, opts) do
+  def markers!(ref, predicate, opts \\ []) do
+    case markers(ref, predicate, opts) do
       {:ok, result} -> result
       {:error, e} -> raise e
     end
@@ -121,26 +122,10 @@ defmodule Weaver.Graph do
     statements =
       tuples
       |> Enum.flat_map(fn
-        {:add, subject, predicate, cursor = %Cursor{}} ->
-          marker = Marker.from_cursor(cursor)
-          sub_var = property(subject, varnames)
-          ref_var = property(marker.cursor.ref, varnames)
-          val_var = property(marker.cursor.val, varnames)
-          marker_var = property(marker, varnames)
-          type_str = marker_type_str(marker.type)
-
-          [
-            "#{sub_var} <weaver.markers> #{marker_var} .",
-            "#{marker_var} <weaver.markers.predicate> #{inspect(predicate)} .",
-            "#{marker_var} <weaver.markers.intValue> #{val_var} .",
-            "#{marker_var} <weaver.markers.object> #{ref_var} .",
-            ~s|#{marker_var} <weaver.markers.type> "#{type_str}" .|
-          ]
-
         {:add, subject, predicate, marker = %Marker{}} ->
           sub_var = property(subject, varnames)
-          ref_var = property(marker.cursor.ref, varnames)
-          val_var = property(marker.cursor.val, varnames)
+          ref_var = property(marker.ref, varnames)
+          val_var = property(marker.val, varnames)
           marker_var = property(marker, varnames)
           type_str = marker_type_str(marker.type)
 
@@ -177,21 +162,10 @@ defmodule Weaver.Graph do
     del_statements =
       del_tuples
       |> Enum.flat_map(fn
-        {:del, subject, predicate, %Cursor{val: val, gap: gap, ref: %{id: id}}} ->
-          sub = property(subject, del_varnames)
-          obj = property(val, del_varnames)
-
-          facets =
-            %{gap: gap, id: id}
-            |> Enum.map(fn {k, v} -> "#{k} = #{property(v, del_varnames)}" end)
-            |> Enum.join(", ")
-
-          ["#{sub} <#{predicate}.cursors> #{obj} (#{facets}) ."]
-
         {:del, subject, predicate, marker = %Marker{}} ->
           sub_var = property(subject, del_varnames)
-          ref_var = property(marker.cursor.ref, del_varnames)
-          val_var = property(marker.cursor.val, del_varnames)
+          ref_var = property(marker.ref, del_varnames)
+          val_var = property(marker.val, del_varnames)
           marker_var = property(marker, del_varnames)
           type_str = marker_type_str(marker.type)
 
@@ -240,7 +214,7 @@ defmodule Weaver.Graph do
     {:reply, result, state}
   end
 
-  def handle_call({:cursors, ref, predicate, opts}, _from, state) do
+  def handle_call({:markers, ref, predicate, opts}, _from, state) do
     limit_str =
       case Keyword.get(opts, :limit) do
         nil -> ""
@@ -259,7 +233,7 @@ defmodule Weaver.Graph do
 
     query = ~s"""
     {
-      cursors(func: eq(id, #{inspect(ref.id)})) {
+      markers(func: eq(id, #{inspect(ref.id)})) {
         weaver.markers @filter(#{filters_str}) (orderdesc: weaver.markers.intValue, orderdesc: weaver.markers.type#{
       limit_str
     }) {
@@ -273,12 +247,12 @@ defmodule Weaver.Graph do
 
     result =
       case do_query(query) do
-        {:ok, %{"cursors" => []}} ->
+        {:ok, %{"markers" => []}} ->
           {:ok, []}
 
-        {:ok, %{"cursors" => [%{"weaver.markers" => cursors}]}} ->
-          cursors =
-            Enum.map(cursors, fn
+        {:ok, %{"markers" => [%{"weaver.markers" => markers}]}} ->
+          markers =
+            Enum.map(markers, fn
               %{
                 "weaver.markers.intValue" => val,
                 "weaver.markers.type" => type_str,
@@ -286,11 +260,12 @@ defmodule Weaver.Graph do
               } ->
                 %Marker{
                   type: to_marker_type(type_str),
-                  cursor: %Cursor{val: val, ref: %Ref{id: id}}
+                  val: val,
+                  ref: %Ref{id: id}
                 }
             end)
 
-          {:ok, cursors}
+          {:ok, markers}
 
         {:error, e} ->
           {:error, e}
@@ -357,7 +332,7 @@ defmodule Weaver.Graph do
     query_body =
       varnames
       |> Enum.flat_map(fn
-        {%Marker{type: type, cursor: %Cursor{val: val}}, var} ->
+        {%Marker{type: type, val: val}, var} ->
           type_str = marker_type_str(type)
 
           [
@@ -403,9 +378,9 @@ defmodule Weaver.Graph do
       {sub = %Ref{}, _pred, obj = %Ref{}} -> [sub, obj]
       {sub = %Ref{}, _pred, obj = %Ref{}, _facets} -> [sub, obj]
       {sub = %Ref{}, _pred, _obj} -> [sub]
-      {:add, sub = %Ref{}, _pred, marker = %Marker{}} -> [sub, marker, marker.cursor.ref]
+      {:add, sub = %Ref{}, _pred, marker = %Marker{}} -> [sub, marker, marker.ref]
       {:add, sub = %Ref{}, _pred, _obj} -> [sub]
-      {:del, sub = %Ref{}, _pred, marker = %Marker{}} -> [sub, marker, marker.cursor.ref]
+      {:del, sub = %Ref{}, _pred, marker = %Marker{}} -> [sub, marker, marker.ref]
       {:del, sub = %Ref{}, _pred, _obj} -> [sub]
       {sub = %Ref{}, _pred, _obj, _facets} -> [sub]
     end)

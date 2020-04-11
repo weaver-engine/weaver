@@ -21,7 +21,7 @@ defmodule Weaver.Step do
                 :fun_env,
                 :operation,
                 :variables,
-                :cursor,
+                :marker,
                 # :prev_chunk_end,
                 refresh: true,
                 backfill: true,
@@ -39,8 +39,8 @@ defmodule Weaver.Step do
           fun_env: function(),
           operation: String.t() | nil,
           variables: map(),
-          cursor: Weaver.Cursor.t() | nil,
-          # prev_chunk_end: Weaver.Cursor.t() | nil,
+          marker: Weaver.Marker.t() | nil,
+          # prev_chunk_end: Weaver.Marker.t() | nil,
           refresh: boolean(),
           backfill: boolean(),
           refreshed: boolean(),
@@ -97,7 +97,7 @@ defmodule Weaver.Step do
     end
   end
 
-  alias Weaver.{Cursor, Marker, Ref, Resolvers, Step, Step.Result}
+  alias Weaver.{Marker, Ref, Resolvers, Step, Step.Result}
 
   @doc """
   Takes a step or a list of steps to be processed.
@@ -207,7 +207,7 @@ defmodule Weaver.Step do
     cond do
       step.refresh && !step.refreshed ->
         gap =
-          cursors!(step.cache, parent_ref, field, limit: 1)
+          markers!(step.cache, parent_ref, field, limit: 1)
           |> List.first()
 
         step = %{step | gap: gap}
@@ -215,11 +215,11 @@ defmodule Weaver.Step do
         do_process(step, result)
 
       step.backfill ->
-        cursors!(step.cache, parent_ref, field, limit: 3)
+        markers!(step.cache, parent_ref, field, limit: 3)
         |> Enum.split_while(&(&1.type != :chunk_end))
         |> case do
           {_refresh_end, [gap_start | rest]} ->
-            step = %{step | cursor: gap_start, gap: List.first(rest)}
+            step = %{step | marker: gap_start, gap: List.first(rest)}
 
             do_process(step, result)
 
@@ -232,6 +232,7 @@ defmodule Weaver.Step do
     end
   end
 
+  # credo:disable-for-next-line Credo.Check.Refactor.CyclomaticComplexity
   def do_process(
         step = %Step{
           ast:
@@ -243,7 +244,7 @@ defmodule Weaver.Step do
     parent_ref = Ref.from(parent_obj)
 
     resolved =
-      Resolvers.dispatched(parent_obj, field, if(step.cursor, do: step.cursor.cursor, else: nil))
+      Resolvers.dispatched(parent_obj, field, if(step.marker, do: step.marker, else: nil))
 
     first_meta = List.wrap(first_meta(step, resolved, parent_ref, field))
 
@@ -252,25 +253,25 @@ defmodule Weaver.Step do
         {:done, objs} ->
           meta =
             cond do
-              step.cursor ->
+              step.marker ->
                 other_meta =
                   step.cache
-                  |> cursors!(parent_ref, field, less_than: step.cursor.cursor.val)
+                  |> markers!(parent_ref, field, less_than: step.marker.val)
                   |> Enum.map(&{:del, parent_ref, field, &1})
 
                 first_meta ++
-                  [{:add, parent_ref, field, %{step.cursor | type: :chunk_start}}] ++
+                  [{:add, parent_ref, field, %{step.marker | type: :chunk_start}}] ++
                   other_meta
 
               objs == [] ->
                 step.cache
-                |> cursors!(parent_ref, field)
+                |> markers!(parent_ref, field)
                 |> Enum.map(&{:del, parent_ref, field, &1})
 
               true ->
                 other_meta =
                   step.cache
-                  |> cursors!(parent_ref, field)
+                  |> markers!(parent_ref, field)
                   |> Enum.map(&{:del, parent_ref, field, &1})
 
                 first_meta ++ other_meta
@@ -278,31 +279,29 @@ defmodule Weaver.Step do
 
           {objs, meta, nil}
 
-        # no gap or gap not closed -> continue with this cursor
-        {:continue, objs, cursor, gap_closed: false} ->
-          cursor = Marker.from_cursor(cursor)
-
-          other_meta = [{:add, parent_ref, field, cursor}]
+        # no gap or gap not closed -> continue with this marker
+        {:continue, objs, marker, gap_closed: false} ->
+          other_meta = [{:add, parent_ref, field, marker}]
 
           # meta = first_meta ++ other_meta
           meta =
             cond do
-              step.cursor -> first_meta ++ other_meta
+              step.marker -> first_meta ++ other_meta
               length(objs) == 1 -> other_meta
               true -> first_meta ++ other_meta
             end
 
-          next = %{step | cursor: cursor, count: step.count + length(objs)}
+          next = %{step | marker: marker, count: step.count + length(objs)}
           {objs, meta, next}
 
         # gap closed and next sequence is only a single record
-        # -> continue with the single-entry cursor
+        # -> continue with the single-entry marker
         {:continue, objs, gap_closed: true, next_gap: true} ->
           meta = first_meta
 
           next = %{
             step
-            | cursor: step.gap,
+            | marker: step.gap,
               gap: :not_loaded,
               refreshed: true,
               count: step.count + length(objs)
@@ -335,16 +334,16 @@ defmodule Weaver.Step do
     raise "Undhandled step:\n\n#{inspect(Map.from_struct(step), pretty: true)}"
   end
 
-  defp first_meta(step = %{cursor: %Marker{}}, _resolved, parent_ref, field) do
-    {:del, parent_ref, field, step.cursor}
+  defp first_meta(step = %{marker: %Marker{}}, _resolved, parent_ref, field) do
+    {:del, parent_ref, field, step.marker}
   end
 
-  defp first_meta(step = %{cursor: %Cursor{}}, _resolved, parent_ref, field) do
-    {:del, parent_ref, field, Marker.from_cursor(step.cursor)}
+  defp first_meta(step = %{marker: %Marker{}}, _resolved, parent_ref, field) do
+    {:del, parent_ref, field, step.marker}
   end
 
-  defp first_meta(_step, {:continue, objs, _cursor}, parent_ref, field) do
-    {:add, parent_ref, field, Marker.from_cursor(Resolvers.start_cursor(objs))}
+  defp first_meta(_step, {:continue, objs, _marker}, parent_ref, field) do
+    {:add, parent_ref, field, Resolvers.start_marker(objs)}
   end
 
   defp first_meta(_step, {:done, []}, _parent_ref, _field) do
@@ -352,7 +351,7 @@ defmodule Weaver.Step do
   end
 
   defp first_meta(_step, {:done, objs}, parent_ref, field) do
-    {:add, parent_ref, field, Marker.from_cursor(Resolvers.start_cursor(objs))}
+    {:add, parent_ref, field, Resolvers.start_marker(objs)}
   end
 
   defp analyze_resolved({:done, objs}, _) do
@@ -360,21 +359,21 @@ defmodule Weaver.Step do
   end
 
   # no gap
-  defp analyze_resolved({:continue, objs, cursor}, %{gap: nil}) do
-    {:continue, objs, cursor, gap_closed: false}
+  defp analyze_resolved({:continue, objs, marker}, %{gap: nil}) do
+    {:continue, objs, marker, gap_closed: false}
   end
 
   # gap closed?
-  defp analyze_resolved({:continue, objs, cursor}, %{gap: gap}) do
-    case Enum.split_while(objs, &before_cursor?(&1, gap)) do
-      {objs, []} -> {:continue, objs, cursor, gap_closed: false}
+  defp analyze_resolved({:continue, objs, marker}, %{gap: gap}) do
+    case Enum.split_while(objs, &before_marker?(&1, gap)) do
+      {objs, []} -> {:continue, objs, marker, gap_closed: false}
       {objs, __} -> {:continue, objs, gap_closed: true, next_gap: gap.type == :chunk_end}
     end
   end
 
-  defp before_cursor?(obj, cursor) do
-    Resolvers.cursor_val(obj) > cursor.cursor.val &&
-      Resolvers.id_for(obj) != cursor.cursor.ref.id
+  defp before_marker?(obj, marker) do
+    Resolvers.marker_val(obj) > marker.val &&
+      Resolvers.id_for(obj) != marker.ref.id
   end
 
   defp continue_with(result, step, subtree) do
@@ -396,15 +395,15 @@ defmodule Weaver.Step do
     continue_with(result, new_step, subtree)
   end
 
-  defp cursors!(mod, parent_ref, field, opts \\ [])
+  defp markers!(mod, parent_ref, field, opts \\ [])
 
-  defp cursors!(nil, _parent_ref, _field, _opts), do: []
+  defp markers!(nil, _parent_ref, _field, _opts), do: []
 
-  defp cursors!({mod, cache_opts}, parent_ref, field, opts) do
-    mod.cursors!(parent_ref, field, Keyword.merge(cache_opts, opts))
+  defp markers!({mod, cache_opts}, parent_ref, field, opts) do
+    mod.markers!(parent_ref, field, Keyword.merge(cache_opts, opts))
   end
 
-  defp cursors!(mod, parent_ref, field, opts) do
-    mod.cursors!(parent_ref, field, opts)
+  defp markers!(mod, parent_ref, field, opts) do
+    mod.markers!(parent_ref, field, opts)
   end
 end

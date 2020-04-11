@@ -1,17 +1,17 @@
 defmodule Weaver.Store do
   @moduledoc """
-  Interface for modules storing edges and cursors.
+  Interface for modules storing edges and markers.
   """
 
-  alias Weaver.{Cursor, Ref}
+  alias Weaver.{Marker, Ref}
 
   # write
   @callback store(list(tuple()), list(tuple())) :: :ok | {:error, any()}
 
   # read
   @callback count(Ref.t(), String.t()) :: {:ok, integer()} | {:error, any()}
-  @callback cursors(Ref.t(), String.t(), keyword()) :: {:ok, list(Cursor.t())} | {:error, any()}
-  # @callback data(Ref.t(), String.t(), Cursor.t() | nil) ::
+  @callback markers(Ref.t(), String.t(), keyword()) :: {:ok, list(Marker.t())} | {:error, any()}
+  # @callback data(Ref.t(), String.t(), Marker.t() | nil) ::
   #             {:ok, list(tuple())} | {:error, any()}
 
   # operational

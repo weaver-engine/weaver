@@ -7,7 +7,7 @@ defmodule Weaver.Resolvers do
   returned as dispatched step and should be handled by the caller.
   """
 
-  alias Weaver.{Cursor, Ref}
+  alias Weaver.{Marker, Ref}
   alias ExTwitter.Model.{Tweet, User}
 
   @twitter_client Application.get_env(:weaver, :twitter)[:client_module]
@@ -21,22 +21,22 @@ defmodule Weaver.Resolvers do
   def id_for(obj = %User{}), do: "TwitterUser:#{obj.screen_name}"
   def id_for(obj = %Tweet{}), do: "Tweet:#{obj.id_str}"
 
-  def end_cursor(objs) when is_list(objs) do
+  def end_marker(objs) when is_list(objs) do
     objs
     |> Enum.min_by(& &1.id)
-    |> cursor(true)
+    |> marker(:chunk_end)
   end
 
-  def start_cursor(objs) when is_list(objs) do
+  def start_marker(objs) when is_list(objs) do
     objs
     |> Enum.max_by(& &1.id)
-    |> cursor(false)
+    |> marker(:chunk_start)
   end
 
-  def cursor_val(%{id: val}), do: val
+  def marker_val(%{id: val}), do: val
 
-  def cursor(obj, gap \\ nil) do
-    Cursor.new(Ref.from(obj), cursor_val(obj), gap)
+  def marker(obj, type) do
+    %Marker{type: type, ref: Ref.from(obj), val: marker_val(obj)}
   end
 
   def resolve_leaf(obj = %User{}, "screenName") do
@@ -94,13 +94,13 @@ defmodule Weaver.Resolvers do
 
   def total_count(_obj, _relation), do: nil
 
-  def dispatched(obj = %User{}, "favorites", cursor) do
+  def dispatched(obj = %User{}, "favorites", prev_end_marker) do
     tweets =
-      case cursor do
+      case prev_end_marker do
         nil ->
           @twitter_client.favorites(id: obj.id, tweet_mode: :extended, count: @api_count)
 
-        %Cursor{val: min_id} ->
+        %Marker{val: min_id} ->
           @twitter_client.favorites(
             id: obj.id,
             tweet_mode: :extended,
@@ -114,13 +114,13 @@ defmodule Weaver.Resolvers do
         {:done, []}
 
       tweets ->
-        {:continue, Enum.take(tweets, @api_take), end_cursor(tweets)}
+        {:continue, Enum.take(tweets, @api_take), end_marker(tweets)}
     end
   end
 
-  def dispatched(obj = %User{}, "tweets", cursor) do
+  def dispatched(obj = %User{}, "tweets", prev_end_marker) do
     tweets =
-      case cursor do
+      case prev_end_marker do
         nil ->
           @twitter_client.user_timeline(
             screen_name: obj.screen_name,
@@ -129,7 +129,7 @@ defmodule Weaver.Resolvers do
             count: @api_count
           )
 
-        min_id ->
+        %Marker{val: min_id} ->
           @twitter_client.user_timeline(
             screen_name: obj.screen_name,
             include_rts: false,
@@ -144,13 +144,13 @@ defmodule Weaver.Resolvers do
         {:done, []}
 
       tweets ->
-        {:continue, Enum.take(tweets, @api_take), end_cursor(tweets)}
+        {:continue, Enum.take(tweets, @api_take), end_marker(tweets)}
     end
   end
 
-  def dispatched(obj = %User{}, "retweets", cursor) do
+  def dispatched(obj = %User{}, "retweets", prev_end_marker) do
     tweets =
-      case cursor do
+      case prev_end_marker do
         nil ->
           @twitter_client.user_timeline(
             screen_name: obj.screen_name,
@@ -158,7 +158,7 @@ defmodule Weaver.Resolvers do
             count: @api_count
           )
 
-        min_id ->
+        %Marker{val: min_id} ->
           @twitter_client.user_timeline(
             screen_name: obj.screen_name,
             tweet_mode: :extended,
@@ -177,25 +177,25 @@ defmodule Weaver.Resolvers do
           |> Enum.filter(& &1.retweeted_status)
           |> Enum.take(@api_take)
 
-        {:continue, tweets, end_cursor(tweets)}
+        {:continue, tweets, end_marker(tweets)}
     end
   end
 
-  def dispatched(%Tweet{}, "likes", _cursor) do
+  def dispatched(%Tweet{}, "likes", _prev_end_marker) do
     {:done, []}
   end
 
-  def dispatched(%Tweet{}, "replies", _cursor) do
+  def dispatched(%Tweet{}, "replies", _prev_end_marker) do
     {:done, []}
   end
 
-  def dispatched(obj = %Tweet{}, "retweets", cursor) do
+  def dispatched(obj = %Tweet{}, "retweets", prev_end_marker) do
     tweets =
-      case cursor do
+      case prev_end_marker do
         nil ->
           @twitter_client.retweets(obj.id, count: @api_count, tweet_mode: :extended)
 
-        min_id ->
+        %Marker{val: min_id} ->
           @twitter_client.retweets(obj.id,
             count: @api_count,
             tweet_mode: :extended,
@@ -208,11 +208,11 @@ defmodule Weaver.Resolvers do
         {:done, []}
 
       tweets ->
-        {:continue, Enum.take(tweets, @api_take), end_cursor(tweets)}
+        {:continue, Enum.take(tweets, @api_take), end_marker(tweets)}
     end
   end
 
-  def dispatched(obj = %Tweet{}, "mentions", _cursor) do
+  def dispatched(obj = %Tweet{}, "mentions", _prev_end_marker) do
     users =
       case obj.entities.user_mentions do
         [] -> []

@@ -1,15 +1,15 @@
 defmodule WeaverTest do
   @moduledoc """
   +-----------------------+-----------------------------------------------+----------------------------------------+
-  |                       |            Initial cursor (refresh)           |       Trailing cursor (backfill)       |
+  |                       |            Initial marker (refresh)           |       Trailing marker (backfill)       |
   |                       +-------------------------+---------------------+--------------+-------------------------+
-  |                       |       Cursor range      | Singe-record cursor | Cursor range |   Single-record cursor  |
+  |                       |       Marker range      | Singe-record marker | Marker range |   Single-record marker  |
   +-----------------------+-------------------------+---------------------+--------------+-------------------------+
   | Record added          | "with gaps" initial     |                     |              |                         |
   +-----------------------+-------------------------+---------------------+--------------+-------------------------+
   | No changes            |                         |                     |              |                         |
   +-----------------------+-------------------------+---------------------+--------------+-------------------------+
-  | Cursor record deleted | "deleted tweets" test 1 |                     |              | "deleted tweets" test 3 |
+  | Marker record deleted | "deleted tweets" test 1 |                     |              | "deleted tweets" test 3 |
   +-----------------------+-------------------------+---------------------+--------------+-------------------------+
   | All records deleted   |                               "deleted tweets" last test                               |
   +-----------------------+----------------------------------------------------------------------------------------+
@@ -66,133 +66,133 @@ defmodule WeaverTest do
     end
   end
 
-  describe "refresh: no cursor, no tweets" do
+  describe "refresh: no marker, no tweets" do
   end
 
-  describe "refresh: no cursor, multiple tweets" do
+  describe "refresh: no marker, multiple tweets" do
   end
 
-  describe "refresh: no cursor, one tweet" do
+  describe "refresh: no marker, one tweet" do
   end
 
-  describe "refresh: single-tweet cursor, no tweets" do
+  describe "refresh: single-tweet marker, no tweets" do
   end
 
-  describe "refresh: single-tweet cursor, tweet unchanged" do
+  describe "refresh: single-tweet marker, tweet unchanged" do
   end
 
-  describe "refresh: single-tweet cursor, tweets added" do
+  describe "refresh: single-tweet marker, tweets added" do
   end
 
-  describe "refresh: single-tweet cursor, tweet deleted" do
+  describe "refresh: single-tweet marker, tweet deleted" do
   end
 
-  describe "refresh: range cursor, no tweets" do
+  describe "refresh: range marker, no tweets" do
   end
 
-  describe "refresh: range cursor, tweets unchanged" do
+  describe "refresh: range marker, tweets unchanged" do
   end
 
-  describe "refresh: range cursor, tweets added" do
+  describe "refresh: range marker, tweets added" do
   end
 
-  describe "refresh: range cursor, tweets deleted, none of cursor remaining" do
+  describe "refresh: range marker, tweets deleted, none of marker remaining" do
   end
 
-  describe "refresh: range cursor, tweets deleted, multiple of cursor remaining" do
+  describe "refresh: range marker, tweets deleted, multiple of marker remaining" do
   end
 
-  describe "refresh: range cursor, tweets deleted, one of cursor remaining" do
+  describe "refresh: range marker, tweets deleted, one of marker remaining" do
   end
 
-  describe "backfill: single-tweet cursor, no gap cursor, no tweets" do
+  describe "backfill: single-tweet marker, no gap marker, no tweets" do
   end
 
-  describe "backfill: single-tweet cursor, no gap cursor, multiple tweets" do
+  describe "backfill: single-tweet marker, no gap marker, multiple tweets" do
   end
 
-  describe "backfill: single-tweet cursor, no gap cursor, one tweet" do
+  describe "backfill: single-tweet marker, no gap marker, one tweet" do
   end
 
-  describe "backfill: single-tweet cursor, single-tweet gap cursor, no tweets" do
+  describe "backfill: single-tweet marker, single-tweet gap marker, no tweets" do
   end
 
-  describe "backfill: single-tweet cursor, single-tweet gap cursor, gap closed" do
+  describe "backfill: single-tweet marker, single-tweet gap marker, gap closed" do
   end
 
-  describe "backfill: single-tweet cursor, single-tweet gap cursor, tweets added, gap closed" do
+  describe "backfill: single-tweet marker, single-tweet gap marker, tweets added, gap closed" do
   end
 
-  describe "backfill: single-tweet cursor, single-tweet gap cursor, tweets added, gap not closed" do
+  describe "backfill: single-tweet marker, single-tweet gap marker, tweets added, gap not closed" do
   end
 
-  describe "backfill: single-tweet cursor, single-tweet gap cursor, tweet deleted" do
+  describe "backfill: single-tweet marker, single-tweet gap marker, tweet deleted" do
   end
 
-  describe "backfill: single-tweet cursor, range gap cursor, no tweets" do
+  describe "backfill: single-tweet marker, range gap marker, no tweets" do
   end
 
-  describe "backfill: single-tweet cursor, range gap cursor, gap closed" do
+  describe "backfill: single-tweet marker, range gap marker, gap closed" do
   end
 
-  describe "backfill: single-tweet cursor, range gap cursor, tweets added, gap closed" do
+  describe "backfill: single-tweet marker, range gap marker, tweets added, gap closed" do
   end
 
-  describe "backfill: single-tweet cursor, range gap cursor, tweets added, gap not closed" do
+  describe "backfill: single-tweet marker, range gap marker, tweets added, gap not closed" do
   end
 
-  describe "backfill: single-tweet cursor, range gap cursor, tweets deleted, none of gap cursor remaining" do
+  describe "backfill: single-tweet marker, range gap marker, tweets deleted, none of gap marker remaining" do
   end
 
-  describe "backfill: single-tweet cursor, range gap cursor, tweets deleted, multiple of gap cursor remaining" do
+  describe "backfill: single-tweet marker, range gap marker, tweets deleted, multiple of gap marker remaining" do
   end
 
-  describe "backfill: single-tweet cursor, range gap cursor, tweets deleted, one of gap cursor remaining" do
+  describe "backfill: single-tweet marker, range gap marker, tweets deleted, one of gap marker remaining" do
   end
 
-  describe "backfill: range cursor, no gap cursor, no tweets" do
+  describe "backfill: range marker, no gap marker, no tweets" do
   end
 
-  describe "backfill: range cursor, no gap cursor, multiple tweets" do
+  describe "backfill: range marker, no gap marker, multiple tweets" do
   end
 
-  describe "backfill: range cursor, no gap cursor, one tweet" do
+  describe "backfill: range marker, no gap marker, one tweet" do
   end
 
-  describe "backfill: range cursor, single-tweet gap cursor, no tweets" do
+  describe "backfill: range marker, single-tweet gap marker, no tweets" do
   end
 
-  describe "backfill: range cursor, single-tweet gap cursor, gap closed" do
+  describe "backfill: range marker, single-tweet gap marker, gap closed" do
   end
 
-  describe "backfill: range cursor, single-tweet gap cursor, tweets added, gap closed" do
+  describe "backfill: range marker, single-tweet gap marker, tweets added, gap closed" do
   end
 
-  describe "backfill: range cursor, single-tweet gap cursor, tweets added, gap not closed" do
+  describe "backfill: range marker, single-tweet gap marker, tweets added, gap not closed" do
   end
 
-  describe "backfill: range cursor, single-tweet gap cursor, tweet deleted" do
+  describe "backfill: range marker, single-tweet gap marker, tweet deleted" do
   end
 
-  describe "backfill: range cursor, range gap cursor, no tweets" do
+  describe "backfill: range marker, range gap marker, no tweets" do
   end
 
-  describe "backfill: range cursor, range gap cursor, gap closed" do
+  describe "backfill: range marker, range gap marker, gap closed" do
   end
 
-  describe "backfill: range cursor, range gap cursor, tweets added, gap closed" do
+  describe "backfill: range marker, range gap marker, tweets added, gap closed" do
   end
 
-  describe "backfill: range cursor, range gap cursor, tweets added, gap not closed" do
+  describe "backfill: range marker, range gap marker, tweets added, gap not closed" do
   end
 
-  describe "backfill: range cursor, range gap cursor, tweets deleted, none of gap cursor remaining" do
+  describe "backfill: range marker, range gap marker, tweets deleted, none of gap marker remaining" do
   end
 
-  describe "backfill: range cursor, range gap cursor, tweets deleted, multiple of gap cursor remaining" do
+  describe "backfill: range marker, range gap marker, tweets deleted, multiple of gap marker remaining" do
   end
 
-  describe "backfill: range cursor, range gap cursor, tweets deleted, one of gap cursor remaining" do
+  describe "backfill: range marker, range gap marker, tweets deleted, one of gap marker remaining" do
   end
 
   describe "without markers" do
@@ -219,7 +219,7 @@ defmodule WeaverTest do
       |> assert_dispatched([
         %{
           ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
-          cursor: nil,
+          marker: nil,
           gap: :not_loaded,
           data: ^user
         }
@@ -242,7 +242,7 @@ defmodule WeaverTest do
       ])
       |> assert_next(%{
         ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
-        cursor: %Marker{type: :chunk_end, cursor: %Cursor{ref: %Ref{id: "Tweet:10"}, val: 10}},
+        marker: %Marker{type: :chunk_end, ref: %Ref{id: "Tweet:10"}, val: 10},
         gap: nil
       })
       |> assert_dispatched([
@@ -265,7 +265,7 @@ defmodule WeaverTest do
       ])
       |> assert_next(%{
         ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
-        cursor: %Marker{type: :chunk_end, cursor: %Cursor{ref: %Ref{id: "Tweet:8"}, val: 8}}
+        marker: %Marker{type: :chunk_end, ref: %Ref{id: "Tweet:8"}, val: 8}
       })
       |> assert_dispatched([
         %{data: ^fav8, ast: {:dispatched, {:field, {:name, _, "retweets"}, _, _, _, _, _}}},
@@ -316,7 +316,7 @@ defmodule WeaverTest do
       |> assert_dispatched([
         %{
           ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
-          cursor: nil,
+          marker: nil,
           gap: :not_loaded,
           data: ^user
         }
@@ -339,7 +339,7 @@ defmodule WeaverTest do
       ])
       |> assert_next(%{
         ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
-        cursor: nil,
+        marker: nil,
         gap: :not_loaded
       })
 
@@ -359,7 +359,7 @@ defmodule WeaverTest do
       ])
       |> assert_next(%{
         ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
-        cursor: %Marker{type: :chunk_end, cursor: %Cursor{ref: %Ref{id: "Tweet:14"}, val: 14}}
+        marker: %Marker{type: :chunk_end, ref: %Ref{id: "Tweet:14"}, val: 14}
       })
       |> assert_dispatched([
         %{data: ^fav14, ast: {:dispatched, {:field, {:name, _, "retweets"}, _, _, _, _, _}}},
@@ -380,7 +380,7 @@ defmodule WeaverTest do
       ])
       |> assert_next(%{
         ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
-        cursor: %Marker{type: :chunk_end, cursor: %Cursor{ref: %Ref{id: "Tweet:12"}, val: 12}}
+        marker: %Marker{type: :chunk_end, ref: %Ref{id: "Tweet:12"}, val: 12}
       })
       |> assert_dispatched([
         %{data: ^fav13, ast: {:dispatched, {:field, {:name, _, "retweets"}, _, _, _, _, _}}}
@@ -400,7 +400,7 @@ defmodule WeaverTest do
       ])
       |> assert_next(%{
         ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
-        cursor: %Marker{type: :chunk_end, cursor: %Cursor{ref: %Ref{id: "Tweet:12"}, val: 12}},
+        marker: %Marker{type: :chunk_end, ref: %Ref{id: "Tweet:12"}, val: 12},
         gap: :not_loaded
       })
       |> assert_dispatched([
@@ -418,7 +418,7 @@ defmodule WeaverTest do
       ])
       |> assert_next(%{
         ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
-        cursor: %Marker{type: :chunk_end, cursor: %Cursor{ref: %Ref{id: "Tweet:8"}, val: 8}},
+        marker: %Marker{type: :chunk_end, ref: %Ref{id: "Tweet:8"}, val: 8},
         gap: :not_loaded
       })
 
@@ -428,7 +428,7 @@ defmodule WeaverTest do
     end
   end
 
-  describe "initial single-record cursor" do
+  describe "initial single-record marker" do
     setup :use_graph
 
     setup do
@@ -473,7 +473,7 @@ defmodule WeaverTest do
       ])
       |> assert_next(%{
         ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
-        cursor: %Marker{type: :chunk_end, cursor: %Cursor{val: 20, ref: %Ref{id: "Tweet:20"}}},
+        marker: %Marker{type: :chunk_end, val: 20, ref: %Ref{id: "Tweet:20"}},
         gap: :not_loaded
       })
     end
@@ -540,7 +540,7 @@ defmodule WeaverTest do
       ])
     end
 
-    test "deletes remaining cursors with deleted remaining tweets (refresh)", %{
+    test "deletes remaining markers with deleted remaining tweets (refresh)", %{
       user: user,
       favorites: favorites
     } do
@@ -592,7 +592,7 @@ defmodule WeaverTest do
       |> refute_next()
     end
 
-    test "deletes remaining cursors with deleted remaining tweets (backfill, gap cursor)", %{
+    test "deletes remaining markers with deleted remaining tweets (backfill, gap marker)", %{
       user: user,
       favorites: favorites
     } do
@@ -637,7 +637,7 @@ defmodule WeaverTest do
       |> refute_next()
     end
 
-    test "deletes all cursors with all tweets deleted", %{user: user} do
+    test "deletes all markers with all tweets deleted", %{user: user} do
       @query
       |> Weaver.prepare(cache: Weaver.Graph)
       |> weave_initial(Twitter, :user, fn "elixirdigest" -> user end)
