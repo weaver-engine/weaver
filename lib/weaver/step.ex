@@ -338,10 +338,6 @@ defmodule Weaver.Step do
     {:del, parent_ref, field, step.marker}
   end
 
-  defp first_meta(step = %{marker: %Marker{}}, _resolved, parent_ref, field) do
-    {:del, parent_ref, field, step.marker}
-  end
-
   defp first_meta(_step, {:continue, objs, _marker}, parent_ref, field) do
     {:add, parent_ref, field, Resolvers.start_marker(objs)}
   end
