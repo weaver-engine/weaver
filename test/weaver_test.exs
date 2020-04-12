@@ -66,133 +66,133 @@ defmodule WeaverTest do
     end
   end
 
-  describe "refresh: no marker, no tweets" do
+  describe "refresh: no marker, all records were deleted" do
   end
 
-  describe "refresh: no marker, multiple tweets" do
+  describe "refresh: no marker, multiple new records retrieved" do
   end
 
-  describe "refresh: no marker, one tweet" do
+  describe "refresh: no marker, one new record retrieved" do
   end
 
-  describe "refresh: single-tweet marker, no tweets" do
+  describe "refresh: first chunk has one record, all records were deleted" do
   end
 
-  describe "refresh: single-tweet marker, tweet unchanged" do
+  describe "refresh: first chunk has one record, which is unchanged" do
   end
 
-  describe "refresh: single-tweet marker, tweets added" do
+  describe "refresh: first chunk has one record, new record retrieved" do
   end
 
-  describe "refresh: single-tweet marker, tweet deleted" do
+  describe "refresh: first chunk has one record, which was deleted" do
   end
 
-  describe "refresh: range marker, no tweets" do
+  describe "refresh: first chunk has multiple records, all records were deleted" do
   end
 
-  describe "refresh: range marker, tweets unchanged" do
+  describe "refresh: first chunk has multiple records, records unchanged" do
   end
 
-  describe "refresh: range marker, tweets added" do
+  describe "refresh: first chunk has multiple records, records added" do
   end
 
-  describe "refresh: range marker, tweets deleted, none of marker remaining" do
+  describe "refresh: first chunk has multiple records, records deleted, none of marker remaining" do
   end
 
-  describe "refresh: range marker, tweets deleted, multiple of marker remaining" do
+  describe "refresh: first chunk has multiple records, records deleted, multiple of marker remaining" do
   end
 
-  describe "refresh: range marker, tweets deleted, one of marker remaining" do
+  describe "refresh: first chunk has multiple records, records deleted, one of marker remaining" do
   end
 
-  describe "backfill: single-tweet marker, no gap marker, no tweets" do
+  describe "backfill: first chunk has one record, no next chunk, all records were deleted" do
   end
 
-  describe "backfill: single-tweet marker, no gap marker, multiple tweets" do
+  describe "backfill: first chunk has one record, no next chunk, multiple new records retrieved" do
   end
 
-  describe "backfill: single-tweet marker, no gap marker, one tweet" do
+  describe "backfill: first chunk has one record, no next chunk, one new record retrieved" do
   end
 
-  describe "backfill: single-tweet marker, single-tweet gap marker, no tweets" do
+  describe "backfill: first chunk has one record, next chunk has single record, all records were deleted" do
   end
 
-  describe "backfill: single-tweet marker, single-tweet gap marker, gap closed" do
+  describe "backfill: first chunk has one record, next chunk has single record, gap closed" do
   end
 
-  describe "backfill: single-tweet marker, single-tweet gap marker, tweets added, gap closed" do
+  describe "backfill: first chunk has one record, next chunk has single record, multiple new records retrieved, gap closed" do
   end
 
-  describe "backfill: single-tweet marker, single-tweet gap marker, tweets added, gap not closed" do
+  describe "backfill: first chunk has one record, next chunk has single record, multiple new records retrieved, gap not closed" do
   end
 
-  describe "backfill: single-tweet marker, single-tweet gap marker, tweet deleted" do
+  describe "backfill: first chunk has one record, next chunk has single record, which was deleted" do
   end
 
-  describe "backfill: single-tweet marker, range gap marker, no tweets" do
+  describe "backfill: first chunk has one record, next chunk has multiple records, all records were deleted" do
   end
 
-  describe "backfill: single-tweet marker, range gap marker, gap closed" do
+  describe "backfill: first chunk has one record, next chunk has multiple records, gap closed" do
   end
 
-  describe "backfill: single-tweet marker, range gap marker, tweets added, gap closed" do
+  describe "backfill: first chunk has one record, next chunk has multiple records, multiple new records retrieved, gap closed" do
   end
 
-  describe "backfill: single-tweet marker, range gap marker, tweets added, gap not closed" do
+  describe "backfill: first chunk has one record, next chunk has multiple records, multiple new records retrieved, gap not closed" do
   end
 
-  describe "backfill: single-tweet marker, range gap marker, tweets deleted, none of gap marker remaining" do
+  describe "backfill: first chunk has one record, next chunk has multiple records, all of which were deleted" do
   end
 
-  describe "backfill: single-tweet marker, range gap marker, tweets deleted, multiple of gap marker remaining" do
+  describe "backfill: first chunk has one record, next chunk has multiple records, some of which deleted, multiple remaining" do
   end
 
-  describe "backfill: single-tweet marker, range gap marker, tweets deleted, one of gap marker remaining" do
+  describe "backfill: first chunk has one record, next chunk has multiple records, some of which deleted, one remaining" do
   end
 
-  describe "backfill: range marker, no gap marker, no tweets" do
+  describe "backfill: first chunk has multiple records, no next chunk, all records were deleted" do
   end
 
-  describe "backfill: range marker, no gap marker, multiple tweets" do
+  describe "backfill: first chunk has multiple records, no next chunk, multiple new records retrieved" do
   end
 
-  describe "backfill: range marker, no gap marker, one tweet" do
+  describe "backfill: first chunk has multiple records, no next chunk, one new record retrieved" do
   end
 
-  describe "backfill: range marker, single-tweet gap marker, no tweets" do
+  describe "backfill: first chunk has multiple records, next chunk has single record, all records were deleted" do
   end
 
-  describe "backfill: range marker, single-tweet gap marker, gap closed" do
+  describe "backfill: first chunk has multiple records, next chunk has single record, gap closed" do
   end
 
-  describe "backfill: range marker, single-tweet gap marker, tweets added, gap closed" do
+  describe "backfill: first chunk has multiple records, next chunk has single record, multiple new records retrieved, gap closed" do
   end
 
-  describe "backfill: range marker, single-tweet gap marker, tweets added, gap not closed" do
+  describe "backfill: first chunk has multiple records, next chunk has single record, multiple new records retrieved, gap not closed" do
   end
 
-  describe "backfill: range marker, single-tweet gap marker, tweet deleted" do
+  describe "backfill: first chunk has multiple records, next chunk has single record, which was deleted" do
   end
 
-  describe "backfill: range marker, range gap marker, no tweets" do
+  describe "backfill: first chunk has multiple records, next chunk has multiple records, all records were deleted" do
   end
 
-  describe "backfill: range marker, range gap marker, gap closed" do
+  describe "backfill: first chunk has multiple records, next chunk has multiple records, gap closed" do
   end
 
-  describe "backfill: range marker, range gap marker, tweets added, gap closed" do
+  describe "backfill: first chunk has multiple records, next chunk has multiple records, multiple new records retrieved, gap closed" do
   end
 
-  describe "backfill: range marker, range gap marker, tweets added, gap not closed" do
+  describe "backfill: first chunk has multiple records, next chunk has multiple records, multiple new records retrieved, gap not closed" do
   end
 
-  describe "backfill: range marker, range gap marker, tweets deleted, none of gap marker remaining" do
+  describe "backfill: first chunk has multiple records, next chunk has multiple records, all of which were deleted" do
   end
 
-  describe "backfill: range marker, range gap marker, tweets deleted, multiple of gap marker remaining" do
+  describe "backfill: first chunk has multiple records, next chunk has multiple records, some of which deleted, multiple remaining" do
   end
 
-  describe "backfill: range marker, range gap marker, tweets deleted, one of gap marker remaining" do
+  describe "backfill: first chunk has multiple records, next chunk has multiple records, some of which deleted, one remaining" do
   end
 
   describe "without markers" do
@@ -220,7 +220,7 @@ defmodule WeaverTest do
         %{
           ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
           marker: nil,
-          gap: :not_loaded,
+          next_chunk_start: :not_loaded,
           data: ^user
         }
       ])
@@ -243,7 +243,7 @@ defmodule WeaverTest do
       |> assert_next(%{
         ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
         marker: %Marker{type: :chunk_end, ref: %Ref{id: "Tweet:10"}, val: 10},
-        gap: nil
+        next_chunk_start: nil
       })
       |> assert_dispatched([
         %{data: ^fav10, ast: {:dispatched, {:field, {:name, _, "retweets"}, _, _, _, _, _}}},
@@ -317,7 +317,7 @@ defmodule WeaverTest do
         %{
           ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
           marker: nil,
-          gap: :not_loaded,
+          next_chunk_start: :not_loaded,
           data: ^user
         }
       ])
@@ -340,7 +340,7 @@ defmodule WeaverTest do
       |> assert_next(%{
         ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
         marker: nil,
-        gap: :not_loaded
+        next_chunk_start: :not_loaded
       })
 
       # favorites pt. 2
@@ -401,7 +401,7 @@ defmodule WeaverTest do
       |> assert_next(%{
         ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
         marker: %Marker{type: :chunk_end, ref: %Ref{id: "Tweet:12"}, val: 12},
-        gap: :not_loaded
+        next_chunk_start: :not_loaded
       })
       |> assert_dispatched([
         %{data: ^fav11, ast: {:dispatched, {:field, {:name, _, "retweets"}, _, _, _, _, _}}}
@@ -419,7 +419,7 @@ defmodule WeaverTest do
       |> assert_next(%{
         ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
         marker: %Marker{type: :chunk_end, ref: %Ref{id: "Tweet:8"}, val: 8},
-        gap: :not_loaded
+        next_chunk_start: :not_loaded
       })
 
       # favorites pt. 6
@@ -474,7 +474,7 @@ defmodule WeaverTest do
       |> assert_next(%{
         ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
         marker: %Marker{type: :chunk_end, val: 20, ref: %Ref{id: "Tweet:20"}},
-        gap: :not_loaded
+        next_chunk_start: :not_loaded
       })
     end
   end
@@ -507,7 +507,7 @@ defmodule WeaverTest do
       {:ok, user: user, favorites: favorites}
     end
 
-    test "works with deleted initial gap tweet", %{user: user, favorites: favorites} do
+    test "works with deleted tweet at start of next chunk", %{user: user, favorites: favorites} do
       [fav21, fav20 | _] = favorites
 
       @query
@@ -592,10 +592,11 @@ defmodule WeaverTest do
       |> refute_next()
     end
 
-    test "deletes remaining markers with deleted remaining tweets (backfill, gap marker)", %{
-      user: user,
-      favorites: favorites
-    } do
+    test "deletes remaining markers with deleted remaining tweets (backfill, next_chunk_start marker)",
+         %{
+           user: user,
+           favorites: favorites
+         } do
       [_, _, _, _, _, _, fav15 | _] = favorites
       favorites = Enum.take(favorites, 7)
 
