@@ -51,7 +51,7 @@ jobs:
     - name: Test suite
       run: mix test
       env:
-        WARNINGS_AS_ERRORS: true
+        WARNINGS_AS_ERRORS: "true"
         DGRAPH_HOST: localhost
         DGRAPH_PORT: ${{ job.services.dgraph.ports[9080] }}
     - name: Generate docs
