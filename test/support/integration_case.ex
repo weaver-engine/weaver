@@ -25,7 +25,7 @@ defmodule Weaver.IntegrationCase do
     end
   end
 
-  alias Weaver.{Marker, Step.Result}
+  alias Weaver.Step.Result
 
   def use_graph(_context) do
     Weaver.Graph.reset!()
