@@ -64,7 +64,7 @@ defmodule Weaver.IntegrationCase do
     Mox.verify!()
 
     case step do
-      %{cache: {mod, opts}} ->
+      %{cache: {mod, opts}} when mod != nil ->
         assert mod.store!(Result.data(result), Result.meta(result), opts)
 
       %{cache: mod} when mod != nil ->
