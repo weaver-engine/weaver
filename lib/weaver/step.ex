@@ -26,7 +26,7 @@ defmodule Weaver.Step do
                 refresh: true,
                 backfill: true,
                 refreshed: false,
-                gap: :not_loaded,
+                next_chunk_start: :not_loaded,
                 count: 0
               ]
 
@@ -44,7 +44,7 @@ defmodule Weaver.Step do
           refresh: boolean(),
           backfill: boolean(),
           refreshed: boolean(),
-          gap: any(),
+          next_chunk_start: Marker.t() | :not_loaded,
           count: non_neg_integer()
         }
 
@@ -198,7 +198,7 @@ defmodule Weaver.Step do
           ast:
             {:dispatched, {:field, {:name, _, field}, [], [], _fields, :undefined, _schema_info}},
           data: parent_obj,
-          gap: :not_loaded
+          next_chunk_start: :not_loaded
         },
         result
       ) do
@@ -206,11 +206,11 @@ defmodule Weaver.Step do
 
     cond do
       step.refresh && !step.refreshed ->
-        gap =
+        next_chunk_start =
           markers!(step.cache, parent_ref, field, limit: 1)
           |> List.first()
 
-        step = %{step | gap: gap}
+        step = %{step | next_chunk_start: next_chunk_start}
 
         do_process(step, result)
 
@@ -218,8 +218,8 @@ defmodule Weaver.Step do
         markers!(step.cache, parent_ref, field, limit: 3)
         |> Enum.split_while(&(&1.type != :chunk_end))
         |> case do
-          {_refresh_end, [gap_start | rest]} ->
-            step = %{step | marker: gap_start, gap: List.first(rest)}
+          {_refresh_end, [prev_chunk_end | rest]} ->
+            step = %{step | marker: prev_chunk_end, next_chunk_start: List.first(rest)}
 
             do_process(step, result)
 
@@ -296,26 +296,26 @@ defmodule Weaver.Step do
 
         # gap closed and next sequence is only a single record
         # -> continue with the single-entry marker
-        {:continue, objs, gap_closed: true, next_gap: true} ->
+        {:continue, objs, gap_closed: true, next_chunk_is_single_record: true} ->
           meta = first_meta
 
           next = %{
             step
-            | marker: step.gap,
-              gap: :not_loaded,
+            | marker: step.next_chunk_start,
+              next_chunk_start: :not_loaded,
               refreshed: true,
               count: step.count + length(objs)
           }
 
           {objs, meta, next}
 
-        # gap closed -> look up the next gap in next iteration
-        {:continue, objs, gap_closed: true, next_gap: _} ->
-          meta = first_meta ++ [{:del, parent_ref, field, step.gap}]
+        # gap closed -> look up the next chunk start in next iteration
+        {:continue, objs, gap_closed: true, next_chunk_is_single_record: _} ->
+          meta = first_meta ++ [{:del, parent_ref, field, step.next_chunk_start}]
 
           next = %{
             step
-            | gap: :not_loaded,
+            | next_chunk_start: :not_loaded,
               refreshed: true,
               count: step.count + length(objs)
           }
@@ -355,15 +355,19 @@ defmodule Weaver.Step do
   end
 
   # no gap
-  defp analyze_resolved({:continue, objs, marker}, %{gap: nil}) do
+  defp analyze_resolved({:continue, objs, marker}, %Step{next_chunk_start: nil}) do
     {:continue, objs, marker, gap_closed: false}
   end
 
   # gap closed?
-  defp analyze_resolved({:continue, objs, marker}, %{gap: gap}) do
-    case Enum.split_while(objs, &before_marker?(&1, gap)) do
-      {objs, []} -> {:continue, objs, marker, gap_closed: false}
-      {objs, __} -> {:continue, objs, gap_closed: true, next_gap: gap.type == :chunk_end}
+  defp analyze_resolved({:continue, objs, marker}, %Step{next_chunk_start: next_chunk_start}) do
+    case Enum.split_while(objs, &before_marker?(&1, next_chunk_start)) do
+      {objs, []} ->
+        {:continue, objs, marker, gap_closed: false}
+
+      {objs, __} ->
+        {:continue, objs,
+         gap_closed: true, next_chunk_is_single_record: next_chunk_start.type == :chunk_end}
     end
   end
 
