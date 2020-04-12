@@ -96,13 +96,13 @@ defmodule WeaverTest do
   describe "refresh: first chunk has multiple records, records added" do
   end
 
-  describe "refresh: first chunk has multiple records, records deleted, none of marker remaining" do
+  describe "refresh: first chunk has multiple records, all of which were deleted" do
   end
 
-  describe "refresh: first chunk has multiple records, records deleted, multiple of marker remaining" do
+  describe "refresh: first chunk has multiple records, some of which were deleted, multiple remaining" do
   end
 
-  describe "refresh: first chunk has multiple records, records deleted, one of marker remaining" do
+  describe "refresh: first chunk has multiple records, some of which were deleted, one remaining" do
   end
 
   describe "backfill: first chunk has one record, no next chunk, all records were deleted" do
@@ -219,7 +219,7 @@ defmodule WeaverTest do
       |> assert_dispatched([
         %{
           ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
-          marker: nil,
+          prev_chunk_end: nil,
           next_chunk_start: :not_loaded,
           data: ^user
         }
@@ -242,7 +242,7 @@ defmodule WeaverTest do
       ])
       |> assert_next(%{
         ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
-        marker: %Marker{type: :chunk_end, ref: %Ref{id: "Tweet:10"}, val: 10},
+        prev_chunk_end: %Marker{type: :chunk_end, ref: %Ref{id: "Tweet:10"}, val: 10},
         next_chunk_start: nil
       })
       |> assert_dispatched([
@@ -265,7 +265,7 @@ defmodule WeaverTest do
       ])
       |> assert_next(%{
         ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
-        marker: %Marker{type: :chunk_end, ref: %Ref{id: "Tweet:8"}, val: 8}
+        prev_chunk_end: %Marker{type: :chunk_end, ref: %Ref{id: "Tweet:8"}, val: 8}
       })
       |> assert_dispatched([
         %{data: ^fav8, ast: {:dispatched, {:field, {:name, _, "retweets"}, _, _, _, _, _}}},
@@ -316,7 +316,7 @@ defmodule WeaverTest do
       |> assert_dispatched([
         %{
           ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
-          marker: nil,
+          prev_chunk_end: nil,
           next_chunk_start: :not_loaded,
           data: ^user
         }
@@ -339,7 +339,7 @@ defmodule WeaverTest do
       ])
       |> assert_next(%{
         ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
-        marker: nil,
+        prev_chunk_end: nil,
         next_chunk_start: :not_loaded
       })
 
@@ -359,7 +359,7 @@ defmodule WeaverTest do
       ])
       |> assert_next(%{
         ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
-        marker: %Marker{type: :chunk_end, ref: %Ref{id: "Tweet:14"}, val: 14}
+        prev_chunk_end: %Marker{type: :chunk_end, ref: %Ref{id: "Tweet:14"}, val: 14}
       })
       |> assert_dispatched([
         %{data: ^fav14, ast: {:dispatched, {:field, {:name, _, "retweets"}, _, _, _, _, _}}},
@@ -380,7 +380,7 @@ defmodule WeaverTest do
       ])
       |> assert_next(%{
         ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
-        marker: %Marker{type: :chunk_end, ref: %Ref{id: "Tweet:12"}, val: 12}
+        prev_chunk_end: %Marker{type: :chunk_end, ref: %Ref{id: "Tweet:12"}, val: 12}
       })
       |> assert_dispatched([
         %{data: ^fav13, ast: {:dispatched, {:field, {:name, _, "retweets"}, _, _, _, _, _}}}
@@ -400,7 +400,7 @@ defmodule WeaverTest do
       ])
       |> assert_next(%{
         ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
-        marker: %Marker{type: :chunk_end, ref: %Ref{id: "Tweet:12"}, val: 12},
+        prev_chunk_end: %Marker{type: :chunk_end, ref: %Ref{id: "Tweet:12"}, val: 12},
         next_chunk_start: :not_loaded
       })
       |> assert_dispatched([
@@ -418,7 +418,7 @@ defmodule WeaverTest do
       ])
       |> assert_next(%{
         ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
-        marker: %Marker{type: :chunk_end, ref: %Ref{id: "Tweet:8"}, val: 8},
+        prev_chunk_end: %Marker{type: :chunk_end, ref: %Ref{id: "Tweet:8"}, val: 8},
         next_chunk_start: :not_loaded
       })
 
@@ -428,7 +428,7 @@ defmodule WeaverTest do
     end
   end
 
-  describe "initial single-record marker" do
+  describe "initial single-record chunk" do
     setup :use_graph
 
     setup do
@@ -473,7 +473,7 @@ defmodule WeaverTest do
       ])
       |> assert_next(%{
         ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
-        marker: %Marker{type: :chunk_end, val: 20, ref: %Ref{id: "Tweet:20"}},
+        prev_chunk_end: %Marker{type: :chunk_end, val: 20, ref: %Ref{id: "Tweet:20"}},
         next_chunk_start: :not_loaded
       })
     end
@@ -592,7 +592,7 @@ defmodule WeaverTest do
       |> refute_next()
     end
 
-    test "deletes remaining markers with deleted remaining tweets (backfill, next_chunk_start marker)",
+    test "deletes remaining markers with deleted remaining tweets (backfill until next chunk)",
          %{
            user: user,
            favorites: favorites

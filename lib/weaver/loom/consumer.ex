@@ -3,7 +3,7 @@ defmodule Weaver.Loom.Consumer do
   Represents a worker at the bottom `GenStage` level.
   Dispatched steps are processed recursively via `Weaver.Step.process/1`.
   A step is passed again to `Weaver.Step.process/1` as long as it
-  returns a continuation (`Weaver.Step` with a `:marker`).
+  returns a new `Weaver.Step` as `next`.
   Otherwise, it sends demand to the `GenStage` level above.
 
   Implements a `GenStage` `consumer`.

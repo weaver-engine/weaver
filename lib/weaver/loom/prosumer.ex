@@ -3,7 +3,7 @@ defmodule Weaver.Loom.Prosumer do
   Represents a worker that handles one `Weaver.Step` at a time.
   Dispatched steps are passed to the `GenStage` level below after each call
   to `Weaver.Step.process/1`. A step is passed again to `Weaver.Step.process/1`
-  as long as it returns a continuation (`Weaver.Step` with a `:marker`).
+  as long as it returns a new `Weaver.Step` as `next`.
   Otherwise, it sends demand to the `GenStage` level above.
 
   Implements a `GenStage` `producer` that is also a `consumer` with manual
