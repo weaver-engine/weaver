@@ -42,8 +42,12 @@ jobs:
       run: mix deps.get
 
     # Checks
-    - name: Compiler warnings
+    - name: Compiler warnings (dev)
       run: mix compile --warnings-as-errors --force
+    - name: Compiler warnings (test)
+      run: mix compile --warnings-as-errors --force
+      env:
+        MIX_ENV: test
     - name: Code format
       run: mix format --check-formatted --dry-run
     - name: Code conventions (Credo)
