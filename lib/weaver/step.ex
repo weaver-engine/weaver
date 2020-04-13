@@ -242,45 +242,44 @@ defmodule Weaver.Step do
 
     resolved = Resolvers.dispatched(parent_obj, field, step.prev_chunk_end)
 
-    first_meta = List.wrap(first_meta(step, resolved, parent_ref, field))
-
     {objs, meta, next} =
       case analyze_resolved(resolved, step) do
-        {:done, objs} ->
+        {:entire_data, []} ->
+          meta = meta_delete_all(step, parent_ref, field)
+
+          {[], meta, nil}
+
+        {:entire_data, objs} ->
           meta =
-            if step.prev_chunk_end do
-              delete_rest =
-                step.cache
-                |> markers!(parent_ref, field, less_than: step.prev_chunk_end.val)
-                |> Enum.map(&{:del, parent_ref, field, &1})
+            [{:add, parent_ref, field, Resolvers.start_marker(objs)}] ++
+              meta_delete_all(step, parent_ref, field)
 
-              first_meta ++ delete_rest
-            else
-              delete_existing =
-                step.cache
-                |> markers!(parent_ref, field)
-                |> Enum.map(&{:del, parent_ref, field, &1})
+          {objs, meta, nil}
 
-              if objs == [] do
-                delete_existing
-              else
-                first_meta ++ delete_existing
-              end
-            end
+        {:last_data, objs} ->
+          meta =
+            [{:del, parent_ref, field, step.prev_chunk_end}] ++
+              meta_delete_all(step, parent_ref, field, less_than: step.prev_chunk_end.val)
 
           {objs, meta, nil}
 
         # no gap or gap not closed -> continue with this marker
-        {:continue, objs, new_chunk_end, gap_closed: false} ->
-          meta = first_meta ++ [{:add, parent_ref, field, new_chunk_end}]
+        {:continue, objs, new_chunk_end} ->
+          meta = [
+            first_meta(step, resolved, parent_ref, field),
+            {:add, parent_ref, field, new_chunk_end}
+          ]
 
           next = %{step | prev_chunk_end: new_chunk_end, count: step.count + length(objs)}
 
           {objs, meta, next}
 
         # gap closed -> look up the next chunk start in next iteration
-        {:continue, objs, gap_closed: true} ->
-          meta = first_meta ++ [{:del, parent_ref, field, step.next_chunk_start}]
+        {:gap_closed, objs} ->
+          meta = [
+            first_meta(step, resolved, parent_ref, field),
+            {:del, parent_ref, field, step.next_chunk_start}
+          ]
 
           next = %{
             step
@@ -312,28 +311,30 @@ defmodule Weaver.Step do
     {:add, parent_ref, field, Resolvers.start_marker(objs)}
   end
 
-  defp first_meta(_step, {:done, []}, _parent_ref, _field) do
-    nil
+  defp meta_delete_all(step, parent_ref, field, opts \\ []) do
+    step.cache
+    |> markers!(parent_ref, field, opts)
+    |> Enum.map(&{:del, parent_ref, field, &1})
   end
 
-  defp first_meta(_step, {:done, objs}, parent_ref, field) do
-    {:add, parent_ref, field, Resolvers.start_marker(objs)}
+  defp analyze_resolved({:done, objs}, %Step{prev_chunk_end: %Marker{}}) do
+    {:last_data, objs}
   end
 
   defp analyze_resolved({:done, objs}, _) do
-    {:done, objs}
+    {:entire_data, objs}
   end
 
   # no gap
   defp analyze_resolved({:continue, objs, new_chunk_end}, %Step{next_chunk_start: nil}) do
-    {:continue, objs, new_chunk_end, gap_closed: false}
+    {:continue, objs, new_chunk_end}
   end
 
   # gap closed?
   defp analyze_resolved({:continue, objs, new_chunk_end}, step = %Step{}) do
     case Enum.split_while(objs, &before_marker?(&1, step.next_chunk_start)) do
-      {objs, []} -> {:continue, objs, new_chunk_end, gap_closed: false}
-      {objs, __} -> {:continue, objs, gap_closed: true}
+      {objs, []} -> {:continue, objs, new_chunk_end}
+      {objs, __} -> {:gap_closed, objs}
     end
   end
 
@@ -360,8 +361,6 @@ defmodule Weaver.Step do
     new_step = Map.put(step, :data, obj)
     continue_with(result, new_step, subtree)
   end
-
-  defp markers!(mod, parent_ref, field, opts \\ [])
 
   defp markers!(nil, _parent_ref, _field, _opts), do: []
 
