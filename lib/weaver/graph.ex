@@ -24,36 +24,52 @@ defmodule Weaver.Graph do
   end
 
   @impl Store
-  # credo:disable-for-next-line Credo.Check.Refactor.CyclomaticComplexity
   def store(data, meta) do
-    Enum.each(data, fn
-      {%Ref{}, pred, %Ref{}} when is_binary(pred) or is_atom(pred) ->
-        :ok
+    with :ok <- validate_data(data),
+         :ok <- validate_meta(meta) do
+      GenServer.call(__MODULE__, {:store, meta ++ data}, @call_timeout)
+    end
+  end
 
-      {%Ref{}, pred, %Ref{}, facets}
-      when (is_binary(pred) or is_atom(pred)) and is_list(facets) ->
-        :ok
+  defp validate_data([]) do
+    :ok
+  end
 
-      {%Ref{}, pred, obj}
-      when (is_binary(pred) or is_atom(pred)) and (is_binary(obj) or is_integer(obj)) ->
-        :ok
+  defp validate_data([{%Ref{}, pred, %Ref{}} | rest]) when is_binary(pred) or is_atom(pred) do
+    validate_data(rest)
+  end
 
-      other ->
-        raise ArgumentError,
-              "Invalid data tuple:\n" <> inspect(other, pretty: true, limit: :infinity)
-    end)
+  defp validate_data([{%Ref{}, pred, %Ref{}, facets} | rest])
+       when (is_binary(pred) or is_atom(pred)) and is_list(facets) do
+    validate_data(rest)
+  end
 
-    Enum.each(meta, fn
-      {op, %Ref{}, pred, %Marker{ref: %Ref{id: id}, val: val}}
-      when op in [:add, :del] and is_binary(pred) and is_binary(id) and is_integer(val) ->
-        :ok
+  defp validate_data([{%Ref{}, pred, obj} | rest])
+       when (is_binary(pred) or is_atom(pred)) and (is_binary(obj) or is_integer(obj)) do
+    validate_data(rest)
+  end
 
-      other ->
-        raise ArgumentError,
-              "Invalid meta tuple:\n" <> inspect(other, pretty: true, limit: :infinity)
-    end)
+  defp validate_data([other | _rest]) do
+    {:error,
+     %RuntimeError{
+       message: "Invalid data tuple:\n" <> inspect(other, pretty: true, limit: :infinity)
+     }}
+  end
 
-    GenServer.call(__MODULE__, {:store, meta ++ data}, @call_timeout)
+  defp validate_meta([]) do
+    :ok
+  end
+
+  defp validate_meta([{op, %Ref{}, pred, %Marker{ref: %Ref{id: id}, val: val}} | rest])
+       when op in [:add, :del] and is_binary(pred) and is_binary(id) and is_integer(val) do
+    validate_meta(rest)
+  end
+
+  defp validate_meta([other | _rest]) do
+    {:error,
+     %RuntimeError{
+       message: "Invalid meta tuple:\n" <> inspect(other, pretty: true, limit: :infinity)
+     }}
   end
 
   def store!(data, meta) do
