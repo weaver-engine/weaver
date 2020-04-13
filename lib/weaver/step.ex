@@ -38,8 +38,8 @@ defmodule Weaver.Step do
           fun_env: function(),
           operation: String.t() | nil,
           variables: map(),
-          prev_chunk_end: Weaver.Marker.t() | nil,
-          next_chunk_start: Weaver.Marker.t() | :not_loaded,
+          prev_chunk_end: Weaver.Marker.t() | nil | :not_loaded,
+          next_chunk_start: Weaver.Marker.t() | nil | :not_loaded,
           refresh: boolean(),
           backfill: boolean(),
           refreshed: boolean(),
@@ -230,7 +230,6 @@ defmodule Weaver.Step do
     end
   end
 
-  # credo:disable-for-next-line Credo.Check.Refactor.CyclomaticComplexity
   def do_process(
         step = %Step{
           ast:
@@ -249,70 +248,44 @@ defmodule Weaver.Step do
       case analyze_resolved(resolved, step) do
         {:done, objs} ->
           meta =
-            cond do
-              step.prev_chunk_end ->
-                other_meta =
-                  step.cache
-                  |> markers!(parent_ref, field, less_than: step.prev_chunk_end.val)
-                  |> Enum.map(&{:del, parent_ref, field, &1})
+            if step.prev_chunk_end do
+              delete_rest =
+                step.cache
+                |> markers!(parent_ref, field, less_than: step.prev_chunk_end.val)
+                |> Enum.map(&{:del, parent_ref, field, &1})
 
-                first_meta ++
-                  [{:add, parent_ref, field, %{step.prev_chunk_end | type: :chunk_start}}] ++
-                  other_meta
-
-              objs == [] ->
+              first_meta ++ delete_rest
+            else
+              delete_existing =
                 step.cache
                 |> markers!(parent_ref, field)
                 |> Enum.map(&{:del, parent_ref, field, &1})
 
-              true ->
-                other_meta =
-                  step.cache
-                  |> markers!(parent_ref, field)
-                  |> Enum.map(&{:del, parent_ref, field, &1})
-
-                first_meta ++ other_meta
+              if objs == [] do
+                delete_existing
+              else
+                first_meta ++ delete_existing
+              end
             end
 
           {objs, meta, nil}
 
         # no gap or gap not closed -> continue with this marker
         {:continue, objs, new_chunk_end, gap_closed: false} ->
-          other_meta = [{:add, parent_ref, field, new_chunk_end}]
-
-          # meta = first_meta ++ other_meta
-          meta =
-            cond do
-              step.prev_chunk_end -> first_meta ++ other_meta
-              length(objs) == 1 -> other_meta
-              true -> first_meta ++ other_meta
-            end
+          meta = first_meta ++ [{:add, parent_ref, field, new_chunk_end}]
 
           next = %{step | prev_chunk_end: new_chunk_end, count: step.count + length(objs)}
-          {objs, meta, next}
-
-        # gap closed and next sequence is only a single record
-        # -> continue with the single-entry marker
-        {:continue, objs, gap_closed: true, next_chunk_is_single_record: true} ->
-          meta = first_meta
-
-          next = %{
-            step
-            | prev_chunk_end: step.next_chunk_start,
-              next_chunk_start: :not_loaded,
-              refreshed: true,
-              count: step.count + length(objs)
-          }
 
           {objs, meta, next}
 
         # gap closed -> look up the next chunk start in next iteration
-        {:continue, objs, gap_closed: true, next_chunk_is_single_record: _} ->
+        {:continue, objs, gap_closed: true} ->
           meta = first_meta ++ [{:del, parent_ref, field, step.next_chunk_start}]
 
           next = %{
             step
-            | next_chunk_start: :not_loaded,
+            | prev_chunk_end: :not_loaded,
+              next_chunk_start: :not_loaded,
               refreshed: true,
               count: step.count + length(objs)
           }
@@ -359,12 +332,8 @@ defmodule Weaver.Step do
   # gap closed?
   defp analyze_resolved({:continue, objs, new_chunk_end}, step = %Step{}) do
     case Enum.split_while(objs, &before_marker?(&1, step.next_chunk_start)) do
-      {objs, []} ->
-        {:continue, objs, new_chunk_end, gap_closed: false}
-
-      {objs, __} ->
-        {:continue, objs,
-         gap_closed: true, next_chunk_is_single_record: step.next_chunk_start.type == :chunk_end}
+      {objs, []} -> {:continue, objs, new_chunk_end, gap_closed: false}
+      {objs, __} -> {:continue, objs, gap_closed: true}
     end
   end
 
