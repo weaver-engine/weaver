@@ -3,7 +3,7 @@ defmodule Weaver.GraphTest do
 
   doctest Weaver.Graph
 
-  import Weaver.Graph, only: [store!: 2, query: 1, markers: 2, markers: 3]
+  import Weaver.Graph, only: [store: 2, store!: 2, query: 1, markers: 2, markers: 3]
 
   setup :use_graph
 
@@ -95,6 +95,16 @@ defmodule Weaver.GraphTest do
   describe "no markers" do
     test "returns empty list", %{user1: user1} do
       assert {:ok, []} = markers(user1, "favorites")
+    end
+  end
+
+  describe "validation" do
+    test "invalid data", %{user1: user1} do
+      assert {:error, _} = store([{user1, "likes", :nothing}], [])
+    end
+
+    test "invalid meta", %{user1: user1} do
+      assert {:error, _} = store([], [{:add, user1, "likes", "bananas"}])
     end
   end
 end
