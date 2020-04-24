@@ -35,9 +35,43 @@ defmodule Weaver.Loom.Consumer do
   end
 
   defp handle_remaining([event | events]) do
-    {data, meta, dispatched, next} = Weaver.Step.process(event)
-    Weaver.Graph.store!(data, meta)
-    handle_remaining(dispatched ++ List.wrap(next) ++ events)
+    try do
+      result = Weaver.Step.process(event.step)
+
+      case event.callback.(result, event.assigns) do
+        {:ok, {_data, _meta, dispatched, next}, assigns} ->
+          dispatched =
+            Enum.map(dispatched, fn step ->
+              %{event | step: step, assigns: assigns}
+            end)
+
+          next = if next, do: %{event | step: next, assigns: assigns}
+
+          handle_remaining(dispatched ++ List.wrap(next) ++ events)
+
+        {:error, _} ->
+          handle_remaining(events)
+      end
+    rescue
+      e in ExTwitter.RateLimitExceededError ->
+        Process.sleep(:timer.seconds(e.reset_in))
+        handle_remaining([event | events])
+
+      _e in Dlex.Error ->
+        Process.sleep(:timer.seconds(5))
+        handle_remaining([event | events])
+
+      e ->
+        case event.callback.({:error, e}, event.assigns) do
+          {:retry, assigns} ->
+            retry_event = %{event | assigns: assigns}
+
+            handle_remaining([retry_event | events])
+
+          :ok ->
+            handle_remaining(events)
+        end
+    end
   end
 
   defp handle_remaining([]) do

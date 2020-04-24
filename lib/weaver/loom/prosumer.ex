@@ -109,9 +109,22 @@ defmodule Weaver.Loom.Prosumer do
     state = %{state | status: :working}
 
     try do
-      {data, meta, dispatched, next} = Weaver.Step.process(event)
-      Weaver.Graph.store!(data, meta)
-      noreply(dispatched, %{state | retrieval: next})
+      result = Weaver.Step.process(event.step)
+
+      case event.callback.(result, event.assigns) do
+        {:ok, {_data, _meta, dispatched, next}, assigns} ->
+          dispatched =
+            Enum.map(dispatched, fn step ->
+              %{event | step: step, assigns: assigns}
+            end)
+
+          next = if next, do: %{event | step: next, assigns: assigns}
+
+          noreply(dispatched, %{state | retrieval: next})
+
+        {:error, _} ->
+          noreply([], %{state | retrieval: nil})
+      end
     rescue
       e in ExTwitter.RateLimitExceededError ->
         Process.send_after(self(), :tick, :timer.seconds(e.reset_in))
@@ -120,6 +133,17 @@ defmodule Weaver.Loom.Prosumer do
       _e in Dlex.Error ->
         Process.send_after(self(), :tick, :timer.seconds(5))
         {:noreply, [], %{state | status: :paused}, :hibernate}
+
+      e ->
+        case event.callback.({:error, e}, event.assigns) do
+          {:retry, assigns} ->
+            retry_event = %{event | assigns: assigns}
+
+            noreply([], %{state | retrieval: retry_event})
+
+          :ok ->
+            noreply([], %{state | retrieval: nil})
+        end
     end
   end
 
