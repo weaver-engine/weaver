@@ -46,6 +46,49 @@ defmodule Weaver.Loom do
             step: Weaver.Step.t(),
             assigns: map()
           }
+
+    @doc "Processes a step, calls the callback and handles its result."
+    @spec work_on(__MODULE__.t()) ::
+            {:ok, list(), Weaver.Step.t() | nil}
+            | {:error, any()}
+            | {:retry, map(), non_neg_integer()}
+    def work_on(event) do
+      try do
+        result = Weaver.Step.process(event.step)
+
+        case event.callback.(result, event.assigns) do
+          {:ok, {_data, _meta, dispatched, next}, assigns} ->
+            dispatched =
+              Enum.map(dispatched, fn step ->
+                %{event | step: step, assigns: assigns}
+              end)
+
+            next = if next, do: %{event | step: next, assigns: assigns}
+
+            {:ok, dispatched, next}
+
+          {:error, e} ->
+            {:error, e}
+        end
+      rescue
+        e in ExTwitter.RateLimitExceededError ->
+          {:retry, event, :timer.seconds(e.reset_in)}
+
+        _e in Dlex.Error ->
+          {:retry, event, :timer.seconds(5)}
+
+        e ->
+          case event.callback.({:error, e}, event.assigns) do
+            {:retry, assigns, interval} ->
+              retry_event = %{event | assigns: assigns}
+
+              {:retry, retry_event, interval}
+
+            :ok ->
+              {:error, e}
+          end
+      end
+    end
   end
 
   use Supervisor
