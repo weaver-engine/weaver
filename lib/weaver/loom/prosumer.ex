@@ -85,7 +85,19 @@ defmodule Weaver.Loom.Prosumer do
   end
 
   def handle_info(:tick, state = %{retrieval: event}) when event != nil do
-    work_on(event, state)
+    state = %{state | status: :working}
+
+    case Weaver.Loom.Event.work_on(event) do
+      {:ok, dispatched, next} ->
+        noreply(dispatched, %{state | retrieval: next})
+
+      {:error, _} ->
+        noreply([], %{state | retrieval: nil})
+
+      {:retry, event, interval} ->
+        Process.send_after(self(), :tick, interval)
+        {:noreply, [], %{state | retrieval: event, status: :paused}, :hibernate}
+    end
   end
 
   def handle_info(:tick, state = %{queue: [event | queue]}) do
@@ -103,48 +115,6 @@ defmodule Weaver.Loom.Prosumer do
       end)
 
     {:noreply, [], %{state | producers: producers, status: :waiting_for_producers}}
-  end
-
-  defp work_on(event, state) do
-    state = %{state | status: :working}
-
-    try do
-      result = Weaver.Step.process(event.step)
-
-      case event.callback.(result, event.assigns) do
-        {:ok, {_data, _meta, dispatched, next}, assigns} ->
-          dispatched =
-            Enum.map(dispatched, fn step ->
-              %{event | step: step, assigns: assigns}
-            end)
-
-          next = if next, do: %{event | step: next, assigns: assigns}
-
-          noreply(dispatched, %{state | retrieval: next})
-
-        {:error, _} ->
-          noreply([], %{state | retrieval: nil})
-      end
-    rescue
-      e in ExTwitter.RateLimitExceededError ->
-        Process.send_after(self(), :tick, :timer.seconds(e.reset_in))
-        {:noreply, [], %{state | status: :paused}, :hibernate}
-
-      _e in Dlex.Error ->
-        Process.send_after(self(), :tick, :timer.seconds(5))
-        {:noreply, [], %{state | status: :paused}, :hibernate}
-
-      e ->
-        case event.callback.({:error, e}, event.assigns) do
-          {:retry, assigns} ->
-            retry_event = %{event | assigns: assigns}
-
-            noreply([], %{state | retrieval: retry_event})
-
-          :ok ->
-            noreply([], %{state | retrieval: nil})
-        end
-    end
   end
 
   defp noreply(events, state, demand \\ 0) do
