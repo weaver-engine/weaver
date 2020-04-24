@@ -14,7 +14,6 @@ defmodule Weaver.Step do
 
   defstruct @enforce_keys ++
               [
-                :callback,
                 :cache,
                 :data,
                 :uid,
@@ -31,7 +30,6 @@ defmodule Weaver.Step do
 
   @type t() :: %__MODULE__{
           ast: tuple(),
-          callback: function() | nil,
           cache: module() | {module(), Keyword.t()} | nil,
           data: any(),
           uid: any(),

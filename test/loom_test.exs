@@ -20,13 +20,25 @@ defmodule Weaver.LoomTest do
   setup :set_mox_global
   setup :use_graph
 
-  test "weave" do
+  setup do
+    pid = self()
+
+    callback = fn result = {data, meta, _, _}, assigns ->
+      Weaver.Graph.store!(data, meta)
+      send(pid, {:callback, result, assigns})
+      {:ok, result, assigns}
+    end
+
+    {:ok, callback: callback}
+  end
+
+  test "weave", %{callback: callback} do
     user = build(TwitterUser, screen_name: "elixirdigest")
     expect(Twitter, :user, fn "elixirdigest" -> user end)
 
-    Weaver.Loom.weave(@query)
+    Weaver.Loom.weave(@query, callback)
 
-    :timer.sleep(500)
+    assert_receive {:callback, _result, _assigns}, 10_000
 
     query = ~s"""
     {
@@ -40,14 +52,14 @@ defmodule Weaver.LoomTest do
   end
 
   describe "Consumer" do
-    test "weave" do
+    test "weave", %{callback: callback} do
       user = build(TwitterUser, screen_name: "elixirdigest")
       expect(Twitter, :user, fn "elixirdigest" -> user end)
 
-      step = Weaver.prepare(@query)
-      Weaver.Loom.Consumer.handle_events([step], self(), %{name: :weaver_consumer_x})
+      event = Weaver.Loom.prepare(@query, callback)
+      Weaver.Loom.Consumer.handle_events([event], self(), %{name: :weaver_consumer_x})
 
-      :timer.sleep(500)
+      assert_receive {:callback, _result, _assigns}, 10_000
 
       query = ~s"""
       {

@@ -25,23 +25,62 @@ defmodule Weaver.Loom do
   ```
   """
 
+  defmodule Event do
+    @moduledoc """
+    Wraps a `Weaver.Step` together with Loom-specific data.
+    """
+
+    @enforce_keys [:callback, :step]
+    defstruct @enforce_keys ++ [assigns: %{}]
+
+    @type(callback_args_ok() :: Weaver.Step.Result.t(), map())
+    @type(callback_args_error() :: {:error, any()}, map())
+    @type callback_args() :: callback_args_ok() | callback_args_error()
+
+    @type callback_return_ok() :: {:ok, Weaver.Step.Result.t(), map()} | {:error, any()}
+    @type callback_return_error() :: {:retry, map()} | :ok
+    @type callback_return() :: callback_return_ok() | callback_return_error()
+
+    @type t() :: %__MODULE__{
+            callback: (callback_args() -> callback_return()),
+            step: Weaver.Step.t(),
+            assigns: map()
+          }
+  end
+
   use Supervisor
 
-  alias Weaver.Loom.{Consumer, Producer, Prosumer}
+  alias Weaver.Loom.{Consumer, Event, Producer, Prosumer}
 
   def start_link(_arg) do
     Supervisor.start_link(__MODULE__, :ok, name: __MODULE__)
   end
 
-  def weave(query, opts \\ [])
+  def prepare(query, opts \\ [], callback)
 
-  def weave(query, opts) when is_binary(query) do
+  def prepare(query, opts, callback) when is_binary(query) do
     Weaver.prepare(query, opts)
+    |> prepare(opts, callback)
+  end
+
+  def prepare(step = %Weaver.Step{}, _opts, callback) do
+    %Event{step: step, callback: callback}
+  end
+
+  def weave(query, opts \\ [], callback)
+
+  def weave(query, opts, callback) when is_binary(query) do
+    prepare(query, opts, callback)
     |> weave()
   end
 
-  def weave(step = %Weaver.Step{}, _opts) do
-    Producer.add(step)
+  def weave(step = %Weaver.Step{}, opts, callback) do
+    prepare(step, opts, callback)
+    |> weave()
+  end
+
+  def weave(event = %Event{}) do
+    Producer.add(event)
   end
 
   def init(:ok) do
