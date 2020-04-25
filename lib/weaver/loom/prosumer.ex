@@ -87,7 +87,7 @@ defmodule Weaver.Loom.Prosumer do
   def handle_info(:tick, state = %{retrieval: event}) when event != nil do
     state = %{state | status: :working}
 
-    case Weaver.Loom.Event.work_on(event) do
+    case Weaver.Loom.Event.process(event) do
       {:ok, dispatched, next} ->
         noreply(dispatched, %{state | retrieval: next})
 

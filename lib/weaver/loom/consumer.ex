@@ -35,7 +35,7 @@ defmodule Weaver.Loom.Consumer do
   end
 
   defp handle_remaining([event | events]) do
-    case Weaver.Loom.Event.work_on(event) do
+    case Weaver.Loom.Event.process(event) do
       {:ok, dispatched, next} ->
         handle_remaining(dispatched ++ List.wrap(next) ++ events)
 
