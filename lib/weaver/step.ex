@@ -44,7 +44,17 @@ defmodule Weaver.Step do
           count: non_neg_integer()
         }
 
-  alias Weaver.{Marker, Ref, Resolvers, Step, Step.Result}
+  alias Weaver.{Marker, Ref, Resolvers, Step, Step.Result, Util}
+
+  require Util.Record
+
+  Util.Record.import_definitions([:field, :frag, :op],
+    from: "deps/graphql/src/graphql_internal.hrl"
+  )
+
+  Util.Record.import_definitions([:document],
+    from: "deps/graphql/src/graphql_schema.hrl"
+  )
 
   @doc """
   Takes a step or a list of steps to be processed.
@@ -65,27 +75,26 @@ defmodule Weaver.Step do
     Enum.reduce(steps, result, &do_process/2)
   end
 
-  def do_process(step = %Step{ast: {:document, ops}}, result) do
+  def do_process(step = %Step{ast: document(definitions: ops)}, result) do
     continue_with(result, step, ops)
   end
 
-  def do_process(
-        step = %Step{ast: {:op, _type, _name, _vars, [], fields, _schema_info}},
-        result
-      ) do
+  def do_process(step = %Step{ast: op(selection_set: fields)}, result) do
     continue_with(result, step, fields)
   end
 
-  def do_process(
-        step = %Step{ast: {:frag, :..., {:name, _, _type}, [], fields, _schema_info}},
-        result
-      ) do
+  def do_process(step = %Step{ast: frag(selection_set: fields)}, result) do
     continue_with(result, step, fields)
   end
 
   def do_process(
         step = %Step{
-          ast: {:field, {:name, _, "node"}, [{"id", %{value: id}}], _, fields, _, _schema_info}
+          ast:
+            field(
+              id: {:name, _, "node"},
+              args: [{"id", %{value: id}}],
+              selection_set: fields
+            )
         },
         result
       ) do
@@ -97,18 +106,12 @@ defmodule Weaver.Step do
     |> continue_with(obj, step, fields)
   end
 
-  def do_process(
-        %Step{ast: {:field, {:name, _, "id"}, [], [], [], :undefined, _schema_info}},
-        result
-      ) do
+  def do_process(%Step{ast: field(id: {:name, _, "id"})}, result) do
     result
   end
 
   def do_process(
-        %Step{
-          ast: {:field, {:name, _, field}, [], [], [], :undefined, _schema_info},
-          data: parent_obj
-        },
+        %Step{ast: field(id: {:name, _, field}, selection_set: []), data: parent_obj},
         result
       ) do
     value = Resolvers.resolve_leaf(parent_obj, field)
@@ -119,7 +122,7 @@ defmodule Weaver.Step do
 
   def do_process(
         step = %Step{
-          ast: {:field, {:name, _, field}, [], [], fields, :undefined, _schema_info},
+          ast: field(id: {:name, _, field}, selection_set: fields),
           data: parent_obj
         },
         result
@@ -142,8 +145,7 @@ defmodule Weaver.Step do
 
   def do_process(
         step = %Step{
-          ast:
-            {:dispatched, {:field, {:name, _, field}, [], [], _fields, :undefined, _schema_info}},
+          ast: {:dispatched, field(id: {:name, _, field})},
           data: parent_obj,
           next_chunk_start: :not_loaded
         },
@@ -181,8 +183,7 @@ defmodule Weaver.Step do
 
   def do_process(
         step = %Step{
-          ast:
-            {:dispatched, {:field, {:name, _, field}, [], [], fields, :undefined, _schema_info}},
+          ast: {:dispatched, field(id: {:name, _, field}, selection_set: fields)},
           data: parent_obj
         },
         result
