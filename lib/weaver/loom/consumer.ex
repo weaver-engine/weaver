@@ -39,12 +39,12 @@ defmodule Weaver.Loom.Consumer do
       {:ok, dispatched, next} ->
         handle_remaining(dispatched ++ List.wrap(next) ++ events)
 
+      {:retry, event, delay} ->
+        Process.sleep(delay)
+        handle_remaining([event | events])
+
       {:error, _} ->
         handle_remaining(events)
-
-      {:retry, event, interval} ->
-        Process.sleep(interval)
-        handle_remaining([event | events])
     end
   end
 

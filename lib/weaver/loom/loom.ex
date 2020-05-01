@@ -2,7 +2,7 @@ defmodule Weaver.Loom do
   @moduledoc """
   Enables running a topology of concurrent Weaver workers using `GenStage`.
 
-  ## Usage
+  ## Supervisor
 
   `Weaver.Loom` implements the `Supervisor` specification, so you can run it
   as part of any supervision tree:
@@ -23,6 +23,47 @@ defmodule Weaver.Loom do
     end
   end
   ```
+
+  ## Usage
+
+  The easiest way to use Loom is to call `Weaver.Loom.weave/3` with:
+
+    * a GraphQL query (String)
+    * an optional list of options (see `Weaver.prepare/2`)
+    * a callback function
+
+  ### Callback function
+
+  The callback function is called with:
+
+    * a `result` tuple (`Weaver.Step.Result`)
+    * a map of `assigns`
+
+  It may return either of:
+
+    * `{:ok, dispatch, next, dispatch_assigns, next_assigns}` to signal Loom to continue the stream
+      * `dispatch` is a list of steps to be dispatched to the next level of workers - usually the (modified) result's `dispatched` list
+      * `next` is a step to be processed next by the same worker - usually the result's `next` step
+      * `dispatch_assigns` is a map to be passed to callbacks in the `dispatch` steps
+      * `next_assigns` is a map to be passed to callbacks in the `next` step
+    * `{:retry, assigns, delay}` to signal Loom to retry the step after the given delay (in milliseconds)
+    * `{:error, error}` to signal Loom to stop processing this stream
+
+  It can choose based on the `errors` it receives as an argument.
+
+  ### Error handling
+
+  Error cases outside Weaver:
+
+    * an error in the resolver that can be retried (e.g. connection timeout)
+      -> resolver adds retry with delay hint (in milliseconds) to `errors`
+         e.g. `{:retry, reason, delay}`
+    * an error in the resolver that can not be retried (e.g. wrong type returned)
+      -> resolver adds error to `errors`
+         e.g. `{:error, reason}`
+    * an error in the callback function
+      -> the callback is responsible for handling its errors
+      -> Loom will catch uncaught errors, ignore them, and continue with the next event
   """
 
   use Supervisor
