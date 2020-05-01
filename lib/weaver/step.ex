@@ -96,7 +96,7 @@ defmodule Weaver.Step do
 
     def set_next({data, meta, errors, dispatched, _next}, step) do
       {data, meta, errors, dispatched, step}
-  end
+    end
   end
 
   alias Weaver.{Marker, Ref, Resolvers, Step, Step.Result}

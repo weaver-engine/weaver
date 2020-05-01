@@ -43,7 +43,7 @@ defmodule Weaver.Loom.Event do
             event
             |> Map.put(:step, step)
             |> Map.put(:next_assings, %{})
-            |> Map.update!(:dispatch_assigns, &Util.Map.merge_non_nil(&1, dispatch_assigns))
+            |> Map.update!(:dispatch_assigns, &Util.Map.merge_delete_nil(&1, dispatch_assigns))
           end)
 
         next =
@@ -54,7 +54,7 @@ defmodule Weaver.Loom.Event do
             step ->
               event
               |> Map.put(:step, step)
-              |> Map.update!(:next_assigns, &Util.Map.merge_non_nil(&1, next_assigns))
+              |> Map.update!(:next_assigns, &Util.Map.merge_delete_nil(&1, next_assigns))
           end
 
         {:ok, dispatched, next}
