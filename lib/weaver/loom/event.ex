@@ -6,16 +6,14 @@ defmodule Weaver.Loom.Event do
   @enforce_keys [:callback, :step]
   defstruct @enforce_keys ++ [dispatch_assigns: %{}, next_assigns: %{}]
 
-  @type(callback_args() :: Weaver.Step.Result.t(), map())
-
-  @type callback_return_ok() :: {:ok, Weaver.Step.Result.t(), map()}
+  @type callback_return_ok() :: {:ok, Weaver.Step.Result.t(), map(), map()}
   @type callback_return_retry() :: {:retry, map(), non_neg_integer()}
   @type callback_return_error() :: {:error, any()}
   @type callback_return() ::
           callback_return_ok() | callback_return_retry() | callback_return_error()
 
   @type t() :: %__MODULE__{
-          callback: (callback_args() -> callback_return()),
+          callback: (Weaver.Step.Result.t(), map(), map() -> callback_return()),
           step: Weaver.Step.t(),
           dispatch_assigns: map(),
           next_assigns: map()
@@ -28,9 +26,9 @@ defmodule Weaver.Loom.Event do
   Processes a step, calls the callback and handles the result.
   """
   @spec process(__MODULE__.t()) ::
-          {:ok, list(), Weaver.Step.t() | nil}
-          | {:error, any()}
+          {:ok, list(__MODULE__.t()), __MODULE__.t() | nil}
           | {:retry, __MODULE__.t(), non_neg_integer()}
+          | {:error, any()}
   def process(event) do
     event.step
     |> Weaver.Step.process()
@@ -59,8 +57,9 @@ defmodule Weaver.Loom.Event do
 
         {:ok, dispatched, next}
 
-      {:retry, assigns, delay} ->
-        retry_event = %{event | assigns: assigns}
+      {:retry, next_assigns, delay} ->
+        retry_event =
+          Map.update!(event, :next_assigns, &Util.Map.merge_delete_nil(&1, next_assigns))
 
         {:retry, retry_event, delay}
 
