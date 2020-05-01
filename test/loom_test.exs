@@ -23,10 +23,10 @@ defmodule Weaver.LoomTest do
   setup do
     pid = self()
 
-    callback = fn result = {data, meta, _, _}, assigns ->
+    callback = fn result = {data, meta, _, _, _}, dispatch_assigns, next_assigns ->
       Weaver.Graph.store!(data, meta)
-      send(pid, {:callback, result, assigns})
-      {:ok, result, assigns}
+      send(pid, {:callback, result, dispatch_assigns, next_assigns})
+      {:ok, result, %{}, %{}}
     end
 
     {:ok, callback: callback}
@@ -38,7 +38,7 @@ defmodule Weaver.LoomTest do
 
     Weaver.Loom.weave(@query, callback)
 
-    assert_receive {:callback, _result, _assigns}, 10_000
+    assert_receive {:callback, _result, _dispatch_assigns, _next_assigns}, 10_000
 
     query = ~s"""
     {
@@ -59,7 +59,7 @@ defmodule Weaver.LoomTest do
       event = Weaver.Loom.prepare(@query, callback)
       Weaver.Loom.Consumer.handle_events([event], self(), %{name: :weaver_consumer_x})
 
-      assert_receive {:callback, _result, _assigns}, 10_000
+      assert_receive {:callback, _result, _dispatch_assigns, _next_assigns}, 10_000
 
       query = ~s"""
       {

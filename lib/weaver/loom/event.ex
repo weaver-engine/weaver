@@ -4,62 +4,80 @@ defmodule Weaver.Loom.Event do
   """
 
   @enforce_keys [:callback, :step]
-  defstruct @enforce_keys ++ [assigns: %{}]
+  defstruct @enforce_keys ++ [dispatch_assigns: %{}, next_assigns: %{}]
 
-  @type(callback_args_ok() :: Weaver.Step.Result.t(), Weaver.Step.t(), map())
-  @type(callback_args_error() :: {:error, any()}, Weaver.Step.t(), map())
-  @type callback_args() :: callback_args_ok() | callback_args_error()
+  @type(callback_args() :: Weaver.Step.Result.t(), map())
 
-  @type callback_return_ok() :: {:ok, Weaver.Step.Result.t(), map()} | {:error, any()}
-  @type callback_return_error() :: {:retry, map()} | :ok
-  @type callback_return() :: callback_return_ok() | callback_return_error()
+  @type callback_return_ok() :: {:ok, Weaver.Step.Result.t(), map()}
+  @type callback_return_retry() :: {:retry, map(), non_neg_integer()}
+  @type callback_return_error() :: {:error, any()}
+  @type callback_return() ::
+          callback_return_ok() | callback_return_retry() | callback_return_error()
 
   @type t() :: %__MODULE__{
           callback: (callback_args() -> callback_return()),
           step: Weaver.Step.t(),
-          assigns: map()
+          dispatch_assigns: map(),
+          next_assigns: map()
         }
 
-  @doc "Processes a step, calls the callback and handles its result."
+  alias Weaver.Step.Result
+  alias Weaver.Util
+
+  @doc """
+  Processes a step, calls the callback and handles the result.
+  """
   @spec process(__MODULE__.t()) ::
           {:ok, list(), Weaver.Step.t() | nil}
           | {:error, any()}
-          | {:retry, map(), non_neg_integer()}
+          | {:retry, __MODULE__.t(), non_neg_integer()}
   def process(event) do
-    try do
-      result = Weaver.Step.process(event.step)
+    event.step
+    |> Weaver.Step.process()
+    |> safe_callback(event)
+    |> case do
+      {:ok, result, dispatch_assigns, next_assigns} ->
+        dispatched =
+          Result.dispatched(result)
+          |> Enum.map(fn step ->
+            event
+            |> Map.put(:step, step)
+            |> Map.put(:next_assings, %{})
+            |> Map.update!(:dispatch_assigns, &Util.Map.merge_non_nil(&1, dispatch_assigns))
+          end)
 
-      case event.callback.(result, event.assigns) do
-        {:ok, {_data, _meta, dispatched, next}, assigns} ->
-          dispatched =
-            Enum.map(dispatched, fn step ->
-              %{event | step: step, assigns: assigns}
-            end)
+        next =
+          case Result.next(result) do
+            nil ->
+              nil
 
-          next = if next, do: %{event | step: next, assigns: assigns}
+            step ->
+              event
+              |> Map.put(:step, step)
+              |> Map.update!(:next_assigns, &Util.Map.merge_non_nil(&1, next_assigns))
+          end
 
-          {:ok, dispatched, next}
+        {:ok, dispatched, next}
 
-        {:error, e} ->
-          {:error, e}
-      end
-    rescue
-      e in ExTwitter.RateLimitExceededError ->
-        {:retry, event, :timer.seconds(e.reset_in)}
+      {:retry, assigns, delay} ->
+        retry_event = %{event | assigns: assigns}
 
-      _e in Dlex.Error ->
-        {:retry, event, :timer.seconds(5)}
+        {:retry, retry_event, delay}
 
-      e ->
-        case event.callback.({:error, e}, event.assigns) do
-          {:retry, assigns, interval} ->
-            retry_event = %{event | assigns: assigns}
-
-            {:retry, retry_event, interval}
-
-          :ok ->
-            {:error, e}
-        end
+      {:error, e} ->
+        {:error, e}
     end
+  end
+
+  def safe_callback(result, %{
+        callback: callback,
+        dispatch_assigns: dispatch_assigns,
+        next_assigns: next_assigns
+      })
+      when is_function(callback, 3) and is_map(dispatch_assigns) and is_map(next_assigns) do
+    callback.(result, dispatch_assigns, next_assigns)
+  rescue
+    e ->
+      {:error, e}
   end
 end

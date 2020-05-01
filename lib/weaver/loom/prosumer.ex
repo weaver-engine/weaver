@@ -91,12 +91,12 @@ defmodule Weaver.Loom.Prosumer do
       {:ok, dispatched, next} ->
         noreply(dispatched, %{state | retrieval: next})
 
+      {:retry, event, delay} ->
+        Process.send_after(self(), :tick, delay)
+        {:noreply, [], %{state | retrieval: event, status: :paused}}
+
       {:error, _} ->
         noreply([], %{state | retrieval: nil})
-
-      {:retry, event, interval} ->
-        Process.send_after(self(), :tick, interval)
-        {:noreply, [], %{state | retrieval: event, status: :paused}, :hibernate}
     end
   end
 
