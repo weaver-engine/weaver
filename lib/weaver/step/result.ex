@@ -24,6 +24,10 @@ defmodule Weaver.Step.Result do
   def dispatched({_, _, _, dispatched, _}), do: dispatched
   def next({_, _, _, _, next}), do: next
 
+  def add_data({data, meta, errors, dispatched, next}, tuples) when is_list(tuples) do
+    {tuples ++ data, meta, errors, dispatched, next}
+  end
+
   def add_data({data, meta, errors, dispatched, next}, tuple) do
     {[tuple | data], meta, errors, dispatched, next}
   end
@@ -50,5 +54,12 @@ defmodule Weaver.Step.Result do
 
   def set_next({data, meta, errors, dispatched, _next}, step) do
     {data, meta, errors, dispatched, step}
+  end
+
+  def merge(result1, result2) do
+    result1
+    |> add_data(data(result2))
+    |> add_meta(meta(result2))
+    |> add_errors(errors(result2))
   end
 end
