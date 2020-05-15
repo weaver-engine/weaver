@@ -32,7 +32,7 @@ defmodule Weaver.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:absinthe, "~> 1.5.0-rc.5"},
+      {:absinthe, "~> 1.5.0"},
       {:jason, "~> 1.1"},
       {:graphql, "~> 0.15.0", hex: :graphql_erl},
       {:dlex, "0.4.1"},
