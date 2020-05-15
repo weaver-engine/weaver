@@ -4,38 +4,51 @@ defmodule Weaver.Absinthe.Phase.Document.Result do
   # Produces data fit for external encoding from annotated value tree
 
   alias Absinthe.{Blueprint, Phase, Type}
+  alias Absinthe.Blueprint.Result.Leaf
   alias Weaver.Step.Result
   alias Weaver.Ref
   use Absinthe.Phase
 
   @spec run(Blueprint.t() | Phase.Error.t(), Keyword.t()) :: {:ok, map}
   def run(%Blueprint{} = bp, _options \\ []) do
-    IO.inspect(bp.execution, limit: 18, label: "execution")
+    # IO.inspect(bp.execution.acc, limit: 18, label: "execution")
 
-    result =
-      case bp.result do
-        %{} -> process(bp)
-        other -> Result.merge(other, process(bp))
-      end
-
-    {:ok, %{bp | result: result}}
+    {:ok, %{bp | result: process(bp)}}
   end
 
   defp process(blueprint) do
+    path =
+      case blueprint.execution.acc do
+        %{resolution: res} -> Enum.reduce(res, [], fn obj, path -> [field_name(obj) | path] end)
+        _ -> []
+      end
+      |> IO.inspect(label: "path", limit: 10)
+
     case blueprint.execution do
       %{validation_errors: [], result: nil} ->
-        data(nil, %{value: nil}, Result.empty())
+        data(path, nil, %{value: nil}, Result.empty())
 
       %{validation_errors: [], result: result} ->
-        data(nil, result, Result.empty())
-        |> IO.inspect(label: "result", limit: 19)
+        IO.inspect(field_name(result.emitter), label: "last result", limit: 15)
+
+        result = data(path, nil, result, Result.empty())
+
+        key = Weaver.Absinthe.Middleware.Dispatch
+
+        Map.get(blueprint.execution.acc, key)
+        |> Enum.reduce(result, fn resolution, result ->
+          # blueprint = update_in(blueprint.execution.acc, &Map.delete(&1, key))
+          Result.dispatch(result, {blueprint, resolution})
+        end)
+
+      # |> IO.inspect(label: "result", limit: 22)
 
       %{validation_errors: errors} ->
         {:validation_failed, errors}
     end
   end
 
-  defp data(parent, %{errors: [_ | _] = field_errors, emitter: emitter}, result) do
+  defp data([], parent, %{errors: [_ | _] = field_errors, emitter: emitter}, result) do
     Result.add_errors(
       result,
       Enum.map(field_errors, &{Ref.from(parent), field_name(emitter), &1})
@@ -47,59 +60,106 @@ defmodule Weaver.Absinthe.Phase.Document.Result do
   #   result
   # end
 
-  defp data(parent, %Absinthe.Blueprint.Result.Leaf{value: nil, emitter: emitter}, result) do
-    Result.add_data(result, {Ref.from(parent), field_name(emitter), nil})
+  defp data(path, parent, %Leaf{value: nil, emitter: emitter} = field, result) do
+    if on_path?(field, path) do
+      Result.add_data(result, {Ref.from(parent), field_name(emitter), nil})
+    else
+      result
+    end
   end
 
-  defp data(_parent, %{value: nil}, result) do
+  defp data(_path, _parent, %{value: nil}, result) do
     result
   end
 
-  defp data(parent, %{value: value, emitter: emitter}, result) do
-    value =
-      case Type.unwrap(emitter.schema_node.type) do
-        %Type.Scalar{} = schema_node ->
-          Type.Scalar.serialize(schema_node, value)
+  defp data(path, parent, %{value: value, emitter: emitter} = field, result) do
+    if on_path?(field, path) do
+      value =
+        case Type.unwrap(emitter.schema_node.type) do
+          %Type.Scalar{} = schema_node ->
+            Type.Scalar.serialize(schema_node, value)
 
-        %Type.Enum{} = schema_node ->
-          Type.Enum.serialize(schema_node, value)
-      end
+          %Type.Enum{} = schema_node ->
+            Type.Enum.serialize(schema_node, value)
+        end
 
-    Result.add_data(result, {Ref.from(parent), field_name(emitter), value})
+      Result.add_data(result, {Ref.from(parent), field_name(emitter), value})
+    else
+      result
+    end
   end
 
   # Object
-  defp data(nil, %{fields: fields, root_value: obj}, result) when obj == %{} do
-    field_data(nil, fields, result)
+  defp data(path, nil, %{fields: fields, root_value: obj} = field, result) when obj == %{} do
+    IO.inspect({path, fields}, label: "obj no val/parent", limit: 12)
+    field_data(next_path(field, path), nil, fields, result)
   end
 
-  defp data(nil, %{fields: fields, root_value: obj}, result) do
-    field_data(obj, fields, result)
+  defp data(path, nil, %{fields: fields, root_value: obj} = field, result) do
+    IO.inspect({path, obj}, label: "obj+val no parent")
+    field_data(next_path(field, path), obj, fields, result)
   end
 
-  defp data(parent, %{fields: fields, emitter: emitter, root_value: obj}, result) do
-    result = Result.add_relation_data(result, {Ref.from(parent), field_name(emitter), [obj]})
-    field_data(obj, fields, result)
+  defp data(path, parent, %{fields: fields, emitter: emitter, root_value: obj} = field, result) do
+    IO.inspect({path, obj, on_path?(field, path)}, label: "obj+val")
+
+    if on_path?(field, path) do
+      result = Result.add_relation_data(result, {Ref.from(parent), field_name(emitter), [obj]})
+      field_data(next_path(field, path), obj, fields, result)
+    else
+      result
+    end
   end
 
   # List
-  defp data(parent, %{values: values}, result) do
-    Enum.reduce(values, result, &data(parent, &1, &2))
+  defp data(path, parent, %{values: values} = field, result) do
+    IO.inspect({path, values}, label: "list", limit: 12)
+
+    if on_path?(field, path) do
+      # result = Result.add_relation_data(result, {Ref.from(parent), field_name(emitter), [obj]})
+      Enum.reduce(values, result, fn val, acc ->
+        IO.inspect({val, path, parent}, label: "LISTVAL", limit: 12)
+        data(path, parent, val, acc)
+      end)
+
+      # Enum.reduce(values, result, &data(path, parent, &1, &2))
+    else
+      result
+    end
   end
 
-  defp field_data(_parent, [], result), do: result
+  defp field_data(_path, _parent, [], result), do: result
 
-  defp field_data(parent, [%Absinthe.Resolution{} = res | fields], result) do
-    result = Result.dispatch(result, res)
-    field_data(parent, fields, result)
+  defp field_data(path, parent, [%Absinthe.Resolution{} | fields], result) do
+    field_data(path, parent, fields, result)
   end
 
-  defp field_data(parent, [field | fields], result) do
-    result = data(parent, field, result)
-    field_data(parent, fields, result)
+  defp field_data(path, parent, [field | fields], result) do
+    IO.inspect({path, field_name(field.emitter), on_path?(field, path)}, label: "FIELD")
+
+    result =
+      if on_path?(field, path) do
+        data(path, parent, field, result)
+      else
+        result
+      end
+
+    field_data(path, parent, fields, result)
   end
 
   defp field_name(%{alias: nil, name: name}), do: name
   defp field_name(%{alias: name}), do: name
   defp field_name(%{name: name}), do: name
+
+  defp on_path?(%{emitter: emitter}, [field_name | _]) do
+    is_nil(field_name) || field_name == field_name(emitter)
+  end
+
+  defp on_path?(_, []), do: true
+
+  defp next_path(field, [_ | next_path] = path) do
+    if on_path?(field, path), do: next_path, else: []
+  end
+
+  defp next_path(_field, []), do: []
 end

@@ -17,6 +17,34 @@ defmodule Weaver.Absinthe do
 
   def pipeline(schema, options) do
     Pipeline.for_document(schema, options)
+    # |> Pipeline.before(Absinthe.Phase.Document.Execution.Resolution)
+
+    # |> Pipeline.replace(
+    #   Absinthe.Phase.Document.Execution.Resolution,
+    #   Weaver.Absinthe.Phase.Document.Execution.Resolution
+    # )
     |> Pipeline.replace(Absinthe.Phase.Document.Result, Weaver.Absinthe.Phase.Document.Result)
+  end
+
+  def resolve({blueprint, resolution}, schema, options \\ []) do
+    # options = Pipeline.options(options)
+    pipeline =
+      pipeline(schema, options)
+      # |> Pipeline.from(Weaver.Absinthe.Phase.Document.Execution.Resolution)
+
+      |> Pipeline.from(Absinthe.Phase.Document.Execution.Resolution)
+
+    blueprint = update_in(blueprint.execution.acc, &Map.put(&1, :resolution, resolution))
+
+    # blueprint =
+    #   update_in(blueprint.execution.acc, &Map.delete(&1, Weaver.Absinthe.Middleware.Dispatch))
+
+    case Absinthe.Pipeline.run(blueprint, pipeline) do
+      {:ok, %{result: result}, _phases} ->
+        {:ok, result}
+
+      {:error, msg, _phases} ->
+        {:error, msg}
+    end
   end
 end
