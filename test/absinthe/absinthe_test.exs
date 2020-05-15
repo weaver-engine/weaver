@@ -31,8 +31,8 @@ defmodule Weaver.Absinthe.AbsintheTest do
   test "works", %{user: user, favorites: favorites} do
     tweet = build(ExTwitter.Model.Tweet)
     Mox.expect(Twitter, :user, fn "elixirdigest" -> user end)
-    Mox.stub(Twitter, :favorites, fn _ -> favorites end)
-    Mox.stub(Twitter, :user_timeline, fn _ -> [tweet] end)
+    Mox.expect(Twitter, :favorites, fn _ -> favorites end)
+    Mox.expect(Twitter, :user_timeline, fn _ -> [tweet] end)
 
     {:ok, result} =
       @query

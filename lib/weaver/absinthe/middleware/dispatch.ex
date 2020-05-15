@@ -16,10 +16,16 @@ defmodule Weaver.Absinthe.Middleware.Dispatch do
     }
   end
 
-  def call(%{state: :suspended} = res, fun) do
+  # call resolver function only if this is the resolution part for the current step
+  def call(%{state: :suspended, acc: %{resolution: path}, path: path} = res, fun) do
     result = fun.()
 
     res
     |> Absinthe.Resolution.put_result(result)
+  end
+
+  # ... skip otherwise
+  def call(res, _fun) do
+    res
   end
 end
