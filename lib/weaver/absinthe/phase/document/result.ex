@@ -5,7 +5,7 @@ defmodule Weaver.Absinthe.Phase.Document.Result do
 
   alias Absinthe.{Blueprint, Phase, Type}
   alias Absinthe.Blueprint.Result.Leaf
-  alias Weaver.Absinthe.Middleware.{Continue, Dispatch}
+  alias Weaver.Absinthe.Middleware.Dispatch
   alias Weaver.Step.Result
   alias Weaver.Ref
   use Absinthe.Phase
