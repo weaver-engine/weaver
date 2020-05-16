@@ -67,11 +67,11 @@ defmodule Weaver.Absinthe.AbsintheTest do
     refute Result.next(result)
 
     IO.puts("\n\nFAVORITES\n-==-0=-=-=-=-=-\n\n")
-    {:ok, result} = Weaver.Absinthe.resolve(disp_favs, Schema)
+    {:ok, result_favs} = Weaver.Absinthe.resolve(disp_favs, Schema)
 
     [fav11, fav10 | _] = favorites
 
-    assert Result.data(result) == [
+    assert Result.data(result_favs) == [
              {%Weaver.Ref{id: "Tweet:10"}, "text", fav10.full_text},
              {%Weaver.Ref{id: "TwitterUser:elixirdigest"}, "favorites",
               %Weaver.Ref{id: "Tweet:10"}},
@@ -80,15 +80,16 @@ defmodule Weaver.Absinthe.AbsintheTest do
               %Weaver.Ref{id: "Tweet:11"}}
            ]
 
-    assert next_favs = Result.next(result)
+    assert Result.dispatched(result_favs) == []
+    assert next_favs = Result.next(result_favs)
 
     IO.puts("\n\nFAVORITES 2\n-==-0=-=-=-=-=-\n\n")
     Mox.expect(Twitter, :favorites, twitter_mock_for(user, favorites, max_id: 9))
-    {:ok, result} = Weaver.Absinthe.resolve(next_favs, Schema)
+    {:ok, result_favs2} = Weaver.Absinthe.resolve(next_favs, Schema)
 
     [_, _, fav9, fav8 | _] = favorites
 
-    assert Result.data(result) == [
+    assert Result.data(result_favs2) == [
              {%Weaver.Ref{id: "Tweet:8"}, "text", fav8.full_text},
              {%Weaver.Ref{id: "TwitterUser:elixirdigest"}, "favorites",
               %Weaver.Ref{id: "Tweet:8"}},
@@ -97,25 +98,27 @@ defmodule Weaver.Absinthe.AbsintheTest do
               %Weaver.Ref{id: "Tweet:9"}}
            ]
 
-    assert next_favs2 = Result.next(result)
+    assert Result.dispatched(result_favs2) == []
+    assert next_favs2 = Result.next(result_favs2)
 
     IO.puts("\n\nFAVORITES 3\n-==-0=-=-=-=-=-\n\n")
     Mox.expect(Twitter, :favorites, twitter_mock_for(user, favorites, max_id: 7))
-    {:ok, result} = Weaver.Absinthe.resolve(next_favs2, Schema)
+    {:ok, result_favs3} = Weaver.Absinthe.resolve(next_favs2, Schema)
 
-    assert Result.data(result) == []
-
-    refute Result.next(result)
+    assert Result.data(result_favs3) == []
+    assert Result.dispatched(result_favs3) == []
+    refute Result.next(result_favs3)
 
     IO.puts("\n\nRETWEETS\n-==-0=-=-=-=-=-\n\n")
-    {:ok, result} = Weaver.Absinthe.resolve(disp_retws, Schema)
+    {:ok, result_retws} = Weaver.Absinthe.resolve(disp_retws, Schema)
 
-    assert Result.data(result) == [
+    assert Result.data(result_retws) == [
              {%Weaver.Ref{id: "Tweet:#{tweet.id}"}, "text", tweet.full_text},
              {%Weaver.Ref{id: "TwitterUser:elixirdigest"}, "tweets",
               %Weaver.Ref{id: "Tweet:#{tweet.id}"}}
            ]
 
-    assert Result.next(result)
+    assert Result.dispatched(result_retws) == []
+    assert Result.next(result_retws)
   end
 end

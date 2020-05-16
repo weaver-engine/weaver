@@ -35,12 +35,10 @@ defmodule Weaver.Absinthe.Phase.Document.Result do
 
         result = data(path, nil, result, Result.empty())
 
-        Map.get(blueprint.execution.acc, Dispatch)
+        Map.get(blueprint.execution.acc, Dispatch, [])
         |> Enum.reduce(result, fn resolution, result ->
-          # blueprint = update_in(blueprint.execution.acc, &Map.delete(&1, keDispatchy))
-          blueprint = update_in(blueprint.execution.acc, &Map.put(&1, :resolution, resolution))
-          # blueprint = update_in(blueprint.execution.acc, &Map.delete(&1, Continue))
-          # blueprint = update_in(blueprint.execution.acc, &Map.delete(&1, Dispatch))
+          # only keep :resolution for dispatched steps
+          blueprint = put_in(blueprint.execution.acc, %{resolution: resolution})
           Result.dispatch(result, blueprint)
         end)
         |> Result.set_next(
