@@ -74,8 +74,9 @@ defmodule Weaver.Absinthe.Schema do
 
   defp dispatched(field) do
     fn obj, _, _ ->
-      fun = fn ->
-        {:ok, Resolvers.dispatched(obj, field, nil) |> IO.inspect(label: field) |> elem(1)}
+      fun = fn prev_end_marker ->
+        Resolvers.dispatched(obj, field, prev_end_marker)
+        |> IO.inspect(label: field)
       end
 
       # {:middleware, Absinthe.Middleware.Async, {fun, []}}

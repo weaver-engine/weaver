@@ -5,6 +5,7 @@ defmodule Weaver.Absinthe.Phase.Document.Result do
 
   alias Absinthe.{Blueprint, Phase, Type}
   alias Absinthe.Blueprint.Result.Leaf
+  alias Weaver.Absinthe.Middleware.{Continue, Dispatch}
   alias Weaver.Step.Result
   alias Weaver.Ref
   use Absinthe.Phase
@@ -30,16 +31,42 @@ defmodule Weaver.Absinthe.Phase.Document.Result do
 
       %{validation_errors: [], result: result} ->
         IO.inspect(field_name(result.emitter), label: "last result", limit: 15)
+        IO.inspect(blueprint.execution.acc, label: "ACC", limit: 12)
 
         result = data(path, nil, result, Result.empty())
 
-        key = Weaver.Absinthe.Middleware.Dispatch
-
-        Map.get(blueprint.execution.acc, key)
+        Map.get(blueprint.execution.acc, Dispatch)
         |> Enum.reduce(result, fn resolution, result ->
-          # blueprint = update_in(blueprint.execution.acc, &Map.delete(&1, key))
-          Result.dispatch(result, {blueprint, resolution})
+          # blueprint = update_in(blueprint.execution.acc, &Map.delete(&1, keDispatchy))
+          blueprint = update_in(blueprint.execution.acc, &Map.put(&1, :resolution, resolution))
+          # blueprint = update_in(blueprint.execution.acc, &Map.delete(&1, Continue))
+          # blueprint = update_in(blueprint.execution.acc, &Map.delete(&1, Dispatch))
+          Result.dispatch(result, blueprint)
         end)
+        |> Result.set_next(
+          case Map.get(blueprint.execution.acc, :please_come_again) do
+            nil ->
+              nil
+
+            prev_end_marker ->
+              # resolution = Map.get(blueprint.execution.acc, Continue)
+
+              # blueprint =
+              #   update_in(blueprint.execution.acc, &Map.put(&1, :resolution, resolution))
+
+              update_in(
+                blueprint.execution.acc,
+                &Map.put(&1, :please_come_again, prev_end_marker)
+              )
+
+              # blueprint =
+              # update_in(blueprint.execution.acc, &Map.put(&1, :resolution, resolution))
+
+              # blueprint = update_in(blueprint.execution.acc, &Map.delete(&1, Continue))
+
+              # update_in(blueprint.execution.acc, &Map.delete(&1, Dispatch))
+          end
+        )
 
       # |> IO.inspect(label: "result", limit: 22)
 
@@ -96,7 +123,7 @@ defmodule Weaver.Absinthe.Phase.Document.Result do
   end
 
   defp data(path, nil, %{fields: fields, root_value: obj} = field, result) do
-    IO.inspect({path, obj}, label: "obj+val no parent")
+    IO.inspect({path, obj, fields}, label: "obj+val no parent", limit: 12)
     field_data(next_path(field, path), obj, fields, result)
   end
 
@@ -130,7 +157,17 @@ defmodule Weaver.Absinthe.Phase.Document.Result do
 
   defp field_data(_path, _parent, [], result), do: result
 
-  defp field_data(path, parent, [%Absinthe.Resolution{} | fields], result) do
+  defp field_data(path, parent, [%Absinthe.Resolution{} = res | fields], result) do
+    result =
+      if res.value && on_path?(%{emitter: res.definition}, path) do
+        IO.inspect({path, Map.delete(res, :acc)},
+          label: "RESOLUTION",
+          limit: 20
+        )
+      else
+        result
+      end
+
     field_data(path, parent, fields, result)
   end
 
