@@ -20,8 +20,14 @@ defmodule Weaver.Absinthe.Phase.Document.Result do
   defp process(blueprint) do
     path =
       case blueprint.execution.acc do
-        %{resolution: res} -> Enum.reduce(res, [], fn obj, path -> [field_name(obj) | path] end)
-        _ -> []
+        %{resolution: res} ->
+          Enum.reduce(res, [], fn
+            int, path when is_integer(int) -> path
+            obj, path -> [field_name(obj) | path]
+          end)
+
+        _ ->
+          []
       end
       |> IO.inspect(label: "path", limit: 10)
 
@@ -128,9 +134,17 @@ defmodule Weaver.Absinthe.Phase.Document.Result do
   defp data(path, parent, %{fields: fields, emitter: emitter, root_value: obj} = field, result) do
     IO.inspect({path, obj, on_path?(field, path)}, label: "obj+val")
 
-    if on_path?(field, path) do
-      result = Result.add_relation_data(result, {Ref.from(parent), field_name(emitter), [obj]})
-      field_data(next_path(field, path), obj, fields, result)
+    next_path = next_path(field, path)
+
+    if next_path do
+      result =
+        if next_path == [] do
+          Result.add_relation_data(result, {Ref.from(parent), field_name(emitter), [obj]})
+        else
+          result
+        end
+
+      field_data(next_path, obj, fields, result)
     else
       result
     end
@@ -193,7 +207,7 @@ defmodule Weaver.Absinthe.Phase.Document.Result do
   defp on_path?(_, []), do: true
 
   defp next_path(field, [_ | next_path] = path) do
-    if on_path?(field, path), do: next_path, else: []
+    if on_path?(field, path), do: next_path
   end
 
   defp next_path(_field, []), do: []

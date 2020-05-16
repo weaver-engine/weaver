@@ -1,6 +1,9 @@
 defmodule Weaver.Absinthe do
   alias Absinthe.Pipeline
 
+  @result_phase Weaver.Absinthe.Phase.Document.Result
+  @resolution_phase Absinthe.Phase.Document.Execution.Resolution
+
   def run(document, schema, options \\ []) do
     pipeline =
       schema
@@ -16,23 +19,33 @@ defmodule Weaver.Absinthe do
   end
 
   def pipeline(schema, options) do
-    Pipeline.for_document(schema, options)
-    # |> Pipeline.before(Absinthe.Phase.Document.Execution.Resolution)
+    options = Keyword.put_new(options, :result_phase, @result_phase)
+    pipeline = Pipeline.for_document(schema, options)
+    # |> Pipeline.before(@resolution_phase)
 
     # |> Pipeline.replace(
-    #   Absinthe.Phase.Document.Execution.Resolution,
-    #   Weaver.Absinthe.Phase.Document.Execution.Resolution
+    #   @resolution_phase,
+    #   Weaver.@resolution_phase
     # )
-    |> Pipeline.replace(Absinthe.Phase.Document.Result, Weaver.Absinthe.Phase.Document.Result)
+    pipeline
+    |> Enum.map(fn
+      {mod, _} -> mod
+      mod -> mod
+    end)
+    |> IO.inspect(label: "pipeline")
+
+    pipeline
+    |> Pipeline.replace(Absinthe.Phase.Document.Result, @result_phase)
   end
 
   def resolve(blueprint, schema, options \\ []) do
     # options = Pipeline.options(options)
+
     pipeline =
       pipeline(schema, options)
-      # |> Pipeline.from(Weaver.Absinthe.Phase.Document.Execution.Resolution)
+      # |> Pipeline.from(Weaver.@resolution_phase)
 
-      |> Pipeline.from(Absinthe.Phase.Document.Execution.Resolution)
+      |> Pipeline.from(@resolution_phase)
 
     # blueprint = update_in(blueprint.execution.acc, &Map.put(&1, :resolution, resolution))
 

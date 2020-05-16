@@ -15,7 +15,20 @@ defmodule Weaver.Absinthe.AbsintheTest do
         }
         tweets {
           text
+          retweets {
+            text
+          }
         }
+      }
+    }
+  }
+  """
+
+  @invalid_query """
+  query {
+    node(id: "TwitterUser:elixirdigest") {
+      ... on TwitterUser {
+        publishedAt
       }
     }
   }
@@ -47,7 +60,6 @@ defmodule Weaver.Absinthe.AbsintheTest do
     tweet = build(ExTwitter.Model.Tweet)
     Mox.expect(Twitter, :user, fn "elixirdigest" -> user end)
     Mox.expect(Twitter, :favorites, twitter_mock_for(user, favorites))
-    Mox.expect(Twitter, :user_timeline, fn _ -> [tweet] end)
 
     {:ok, result} =
       @query
@@ -62,7 +74,7 @@ defmodule Weaver.Absinthe.AbsintheTest do
     require IEx
     IEx.pry()
 
-    [disp_favs, disp_retws] = Result.dispatched(result)
+    [disp_favs, disp_tweets] = Result.dispatched(result)
 
     refute Result.next(result)
 
@@ -109,16 +121,37 @@ defmodule Weaver.Absinthe.AbsintheTest do
     assert Result.dispatched(result_favs3) == []
     refute Result.next(result_favs3)
 
-    IO.puts("\n\nRETWEETS\n-==-0=-=-=-=-=-\n\n")
-    {:ok, result_retws} = Weaver.Absinthe.resolve(disp_retws, Schema)
+    IO.puts("\n\nTWEETS\n-==-0=-=-=-=-=-\n\n")
+    Mox.expect(Twitter, :user_timeline, fn _ -> [tweet] end)
+    {:ok, result_tweets} = Weaver.Absinthe.resolve(disp_tweets, Schema)
 
-    assert Result.data(result_retws) == [
+    assert Result.data(result_tweets) == [
              {%Weaver.Ref{id: "Tweet:#{tweet.id}"}, "text", tweet.full_text},
              {%Weaver.Ref{id: "TwitterUser:elixirdigest"}, "tweets",
               %Weaver.Ref{id: "Tweet:#{tweet.id}"}}
            ]
 
-    assert Result.dispatched(result_retws) == []
-    assert Result.next(result_retws)
+    assert [disp_retweets] = Result.dispatched(result_tweets)
+    assert Result.next(result_tweets)
+
+    IO.puts("\n\nRETWEETS\n-==-0=-=-=-=-=-\n\n")
+    retweet = build(ExTwitter.Model.Tweet)
+    Mox.expect(Twitter, :retweets, fn _, _ -> [retweet] end)
+    {:ok, result_retweets} = Weaver.Absinthe.resolve(disp_retweets, Schema)
+
+    assert Result.data(result_retweets) == [
+             {%Weaver.Ref{id: "Tweet:#{retweet.id}"}, "text", retweet.full_text},
+             {%Weaver.Ref{id: "Tweet:#{tweet.id}"}, "retweets",
+              %Weaver.Ref{id: "Tweet:#{retweet.id}"}}
+           ]
+
+    assert Result.dispatched(result_retweets) == []
+    assert Result.next(result_retweets)
+  end
+
+  test "fails on invalid query", %{user: user, favorites: favorites} do
+    {:ok, {:validation_failed, _}} =
+      @invalid_query
+      |> Weaver.Absinthe.run(Schema)
   end
 end
