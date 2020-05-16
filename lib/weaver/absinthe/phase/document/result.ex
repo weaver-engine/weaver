@@ -20,14 +20,8 @@ defmodule Weaver.Absinthe.Phase.Document.Result do
   defp process(blueprint) do
     path =
       case blueprint.execution.acc do
-        %{resolution: res} ->
-          Enum.reduce(res, [], fn
-            int, path when is_integer(int) -> path
-            obj, path -> [field_name(obj) | path]
-          end)
-
-        _ ->
-          []
+        %{resolution: res} -> Enum.reduce(res, [], fn obj, path -> [field_name(obj) | path] end)
+        _ -> []
       end
       |> IO.inspect(label: "path", limit: 10)
 
@@ -132,7 +126,7 @@ defmodule Weaver.Absinthe.Phase.Document.Result do
   end
 
   defp data(path, parent, %{fields: fields, emitter: emitter, root_value: obj} = field, result) do
-    IO.inspect({path, obj, on_path?(field, path)}, label: "obj+val")
+    IO.inspect({field_name(emitter), path, on_path?(field, path), obj}, label: "obj+val")
 
     next_path = next_path(field, path)
 
@@ -155,11 +149,20 @@ defmodule Weaver.Absinthe.Phase.Document.Result do
     IO.inspect({path, values}, label: "list", limit: 12)
 
     if on_path?(field, path) do
-      # result = Result.add_relation_data(result, {Ref.from(parent), field_name(emitter), [obj]})
-      Enum.reduce(values, result, fn val, acc ->
-        IO.inspect({val, path, parent}, label: "LISTVAL", limit: 12)
-        data(path, parent, val, acc)
-      end)
+      case path do
+        [next, pos | rest] ->
+          val = Enum.at(values, pos)
+
+          # result = Result.add_relation_data(result, {Ref.from(parent), field_name(emitter), [obj]})
+          IO.inspect({val, path, parent}, label: "LISTVAL", limit: 12)
+          data([next | rest], parent, val, result)
+
+        _ ->
+          Enum.reduce(values, result, fn val, acc ->
+            IO.inspect({val, path, parent}, label: "LISTVAL", limit: 12)
+            data(path, parent, val, acc)
+          end)
+      end
 
       # Enum.reduce(values, result, &data(path, parent, &1, &2))
     else
@@ -199,9 +202,14 @@ defmodule Weaver.Absinthe.Phase.Document.Result do
   defp field_name(%{alias: nil, name: name}), do: name
   defp field_name(%{alias: name}), do: name
   defp field_name(%{name: name}), do: name
+  defp field_name(position) when is_integer(position), do: position
 
   defp on_path?(%{emitter: emitter}, [field_name | _]) do
     is_nil(field_name) || field_name == field_name(emitter)
+  end
+
+  defp on_path?(pos, [other_pos | _]) when is_integer(pos) do
+    pos == other_pos
   end
 
   defp on_path?(_, []), do: true

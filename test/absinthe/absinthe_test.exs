@@ -57,7 +57,6 @@ defmodule Weaver.Absinthe.AbsintheTest do
   end
 
   test "works", %{user: user, favorites: favorites} do
-    tweet = build(ExTwitter.Model.Tweet)
     Mox.expect(Twitter, :user, fn "elixirdigest" -> user end)
     Mox.expect(Twitter, :favorites, twitter_mock_for(user, favorites))
 
@@ -122,31 +121,70 @@ defmodule Weaver.Absinthe.AbsintheTest do
     refute Result.next(result_favs3)
 
     IO.puts("\n\nTWEETS\n-==-0=-=-=-=-=-\n\n")
-    Mox.expect(Twitter, :user_timeline, fn _ -> [tweet] end)
+    tweet1 = build(ExTwitter.Model.Tweet)
+    tweet2 = build(ExTwitter.Model.Tweet)
+    Mox.expect(Twitter, :user_timeline, fn _ -> [tweet1, tweet2] end)
     {:ok, result_tweets} = Weaver.Absinthe.resolve(disp_tweets, Schema)
 
     assert Result.data(result_tweets) == [
-             {%Weaver.Ref{id: "Tweet:#{tweet.id}"}, "text", tweet.full_text},
+             {%Weaver.Ref{id: "Tweet:#{tweet2.id}"}, "text", tweet2.full_text},
              {%Weaver.Ref{id: "TwitterUser:elixirdigest"}, "tweets",
-              %Weaver.Ref{id: "Tweet:#{tweet.id}"}}
+              %Weaver.Ref{id: "Tweet:#{tweet2.id}"}},
+             {%Weaver.Ref{id: "Tweet:#{tweet1.id}"}, "text", tweet1.full_text},
+             {%Weaver.Ref{id: "TwitterUser:elixirdigest"}, "tweets",
+              %Weaver.Ref{id: "Tweet:#{tweet1.id}"}}
            ]
 
-    assert [disp_retweets] = Result.dispatched(result_tweets)
+    assert [disp_retweets1, disp_retweets2] = Result.dispatched(result_tweets)
     assert Result.next(result_tweets)
 
-    IO.puts("\n\nRETWEETS\n-==-0=-=-=-=-=-\n\n")
-    retweet = build(ExTwitter.Model.Tweet)
-    Mox.expect(Twitter, :retweets, fn _, _ -> [retweet] end)
-    {:ok, result_retweets} = Weaver.Absinthe.resolve(disp_retweets, Schema)
+    IO.puts("\n\nRETWEETS 1a\n-==-0=-=-=-=-=-\n\n")
+    retweet1 = build(ExTwitter.Model.Tweet)
+    tweet1_id = tweet1.id
+    Mox.expect(Twitter, :retweets, fn ^tweet1_id, _ -> [retweet1] end)
+    {:ok, result_retweets1} = Weaver.Absinthe.resolve(disp_retweets1, Schema)
 
-    assert Result.data(result_retweets) == [
-             {%Weaver.Ref{id: "Tweet:#{retweet.id}"}, "text", retweet.full_text},
-             {%Weaver.Ref{id: "Tweet:#{tweet.id}"}, "retweets",
-              %Weaver.Ref{id: "Tweet:#{retweet.id}"}}
+    assert Result.data(result_retweets1) == [
+             {%Weaver.Ref{id: "Tweet:#{retweet1.id}"}, "text", retweet1.full_text},
+             {%Weaver.Ref{id: "Tweet:#{tweet1.id}"}, "retweets",
+              %Weaver.Ref{id: "Tweet:#{retweet1.id}"}}
            ]
 
-    assert Result.dispatched(result_retweets) == []
-    assert Result.next(result_retweets)
+    assert Result.dispatched(result_retweets1) == []
+    assert next_retweets1 = Result.next(result_retweets1)
+
+    IO.puts("\n\nRETWEETS 2\n-==-0=-=-=-=-=-\n\n")
+    retweet2 = build(ExTwitter.Model.Tweet)
+    tweet2_id = tweet2.id
+    Mox.expect(Twitter, :retweets, fn ^tweet2_id, _ -> [retweet2] end)
+    {:ok, result_retweets2} = Weaver.Absinthe.resolve(disp_retweets2, Schema)
+
+    assert Result.data(result_retweets2) == [
+             {%Weaver.Ref{id: "Tweet:#{retweet2.id}"}, "text", retweet2.full_text},
+             {%Weaver.Ref{id: "Tweet:#{tweet2.id}"}, "retweets",
+              %Weaver.Ref{id: "Tweet:#{retweet2.id}"}}
+           ]
+
+    assert Result.dispatched(result_retweets2) == []
+    assert next_retweets2 = Result.next(result_retweets2)
+
+    IO.puts("\n\nRETWEETS 1b\n-==-0=-=-=-=-=-\n\n")
+    Mox.expect(Twitter, :retweets, fn ^tweet1_id, _ -> [] end)
+    {:ok, result_retweets1b} = Weaver.Absinthe.resolve(next_retweets1, Schema)
+
+    assert Result.data(result_retweets1b) == []
+
+    assert Result.dispatched(result_retweets1b) == []
+    refute Result.next(result_retweets1b)
+
+    IO.puts("\n\nRETWEETS 2b\n-==-0=-=-=-=-=-\n\n")
+    Mox.expect(Twitter, :retweets, fn ^tweet2_id, _ -> [] end)
+    {:ok, result_retweets2b} = Weaver.Absinthe.resolve(next_retweets2, Schema)
+
+    assert Result.data(result_retweets2b) == []
+
+    assert Result.dispatched(result_retweets2b) == []
+    refute Result.next(result_retweets2b)
   end
 
   test "fails on invalid query", %{user: user, favorites: favorites} do
