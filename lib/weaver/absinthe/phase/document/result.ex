@@ -5,7 +5,7 @@ defmodule Weaver.Absinthe.Phase.Document.Result do
 
   alias Absinthe.{Blueprint, Phase, Type}
   alias Absinthe.Blueprint.Result.Leaf
-  alias Weaver.Absinthe.Middleware.Dispatch
+  alias Weaver.Absinthe.Middleware.{Continue, Dispatch}
   alias Weaver.Step.Result
   alias Weaver.Ref
   use Absinthe.Phase
@@ -41,30 +41,7 @@ defmodule Weaver.Absinthe.Phase.Document.Result do
           blueprint = put_in(blueprint.execution.acc, %{resolution: resolution})
           Result.dispatch(result, blueprint)
         end)
-        |> Result.set_next(
-          case Map.get(blueprint.execution.acc, :please_come_again) do
-            nil ->
-              nil
-
-            prev_end_marker ->
-              # resolution = Map.get(blueprint.execution.acc, Continue)
-
-              # blueprint =
-              #   update_in(blueprint.execution.acc, &Map.put(&1, :resolution, resolution))
-
-              update_in(
-                blueprint.execution.acc,
-                &Map.put(&1, :please_come_again, prev_end_marker)
-              )
-
-              # blueprint =
-              # update_in(blueprint.execution.acc, &Map.put(&1, :resolution, resolution))
-
-              # blueprint = update_in(blueprint.execution.acc, &Map.delete(&1, Continue))
-
-              # update_in(blueprint.execution.acc, &Map.delete(&1, Dispatch))
-          end
-        )
+        |> Result.set_next(blueprint.execution.acc[Continue] && blueprint)
 
       # |> IO.inspect(label: "result", limit: 22)
 

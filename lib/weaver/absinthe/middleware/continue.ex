@@ -3,19 +3,27 @@ defmodule Weaver.Absinthe.Middleware.Continue do
   This plugin enables asynchronous execution of a field.
   """
 
+  defstruct [
+    :prev_chunk_end
+  ]
+
+  @type t() :: %__MODULE__{
+          prev_chunk_end: Weaver.Marker.t() | nil | :not_loaded
+        }
+
   @behaviour Absinthe.Middleware
 
   # call resolver function only if this is the resolution part for the current step
   def call(%{state: :suspended, acc: %{resolution: path}, path: path} = res, fun) do
-    case fun.(res.acc[:please_come_again]) do
+    acc = Map.get(res.acc, __MODULE__, %__MODULE__{})
+
+    case fun.(acc.prev_chunk_end) do
       {:continue, value, end_marker} ->
+        new_acc = %{acc | prev_chunk_end: end_marker}
+
         %{
           res
-          | acc:
-              res.acc
-              |> Map.put(__MODULE__, res.path)
-              |> Map.put(:please_come_again, end_marker),
-            # context: Map.put(res.context, :end_marker, end_marker),
+          | acc: Map.put(res.acc, __MODULE__, new_acc),
             middleware: [{__MODULE__, fun} | res.middleware]
             # middleware: [{__MODULE__, {fun, end_marker}} | res.middleware]
         }
@@ -24,8 +32,7 @@ defmodule Weaver.Absinthe.Middleware.Continue do
       {:done, value} ->
         %{
           res
-          | acc: res.acc |> Map.delete(__MODULE__) |> Map.delete(:please_come_again),
-            context: Map.delete(res.context, :end_marker)
+          | acc: Map.delete(res.acc, __MODULE__)
         }
         |> Absinthe.Resolution.put_result({:ok, value})
     end

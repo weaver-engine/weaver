@@ -60,13 +60,13 @@ defmodule Weaver.Absinthe do
               result
 
             next_blueprint ->
-              prev_end_marker = next_blueprint.execution.acc[:please_come_again]
+              continuation = next_blueprint.execution.acc[Continue]
 
               Weaver.Step.Result.set_next(
                 result,
                 update_in(
                   blueprint.execution.acc,
-                  &Map.put(&1, :please_come_again, prev_end_marker)
+                  &Map.put(&1, Continue, continuation)
                 )
               )
           end
