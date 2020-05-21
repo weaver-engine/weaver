@@ -33,7 +33,11 @@ defmodule Weaver.Absinthe.Phase.Document.Result do
         IO.inspect(field_name(result.emitter), label: "last result", limit: 15)
         IO.inspect(blueprint.execution.acc, label: "ACC", limit: 12)
 
-        result = data(path, nil, result, Result.empty())
+        meta = Map.get(blueprint.execution.acc, :meta, [])
+
+        result =
+          data(path, nil, result, Result.empty())
+          |> Result.add_meta(meta)
 
         Map.get(blueprint.execution.acc, Dispatch, [])
         |> Enum.reduce(result, fn resolution, result ->
