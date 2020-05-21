@@ -27,9 +27,7 @@ defmodule Weaver.Absinthe.Middleware.Continue do
 
   # call resolver function only if this is the resolution part for the current step
   def call(%{state: :suspended, acc: %{resolution: path}, path: path} = res, fun) do
-    acc = Map.get(res.acc, __MODULE__, %__MODULE__{})
-
-    [%Absinthe.Blueprint.Document.Field{name: field} | _] = path
+    cache = res.context[:cache]
 
     parent_ref =
       case res.source do
@@ -38,89 +36,71 @@ defmodule Weaver.Absinthe.Middleware.Continue do
         parent_obj -> Ref.from(parent_obj)
       end
 
-    {prev_chunk_end, next_chunk_start} =
-      get_markers(res.context[:cache], acc, parent_ref, field, acc.prev_chunk_end)
+    [%Absinthe.Blueprint.Document.Field{name: field} | _] = path
 
-    acc = %{acc | prev_chunk_end: prev_chunk_end, next_chunk_start: next_chunk_start}
-    step = acc
+    step =
+      Map.get(res.acc, __MODULE__, %__MODULE__{})
+      |> load_markers(cache, parent_ref, field)
 
-    resolved = fun.(acc.prev_chunk_end)
+    resolved = fun.(step.prev_chunk_end)
 
-    case analyze_resolved(resolved, acc) do
-      {:entire_data, []} ->
-        meta = meta_delete_all(res.context[:cache], parent_ref, field)
+    {value, meta, next} =
+      case analyze_resolved(resolved, step) do
+        {:entire_data, []} ->
+          meta = meta_delete_all(cache, parent_ref, field)
 
-        {[], meta, nil}
+          {[], meta, nil}
 
-      {:entire_data, objs} ->
-        meta =
-          [{:add, parent_ref, field, Resolvers.start_marker(objs)}] ++
-            meta_delete_all(res.context[:cache], parent_ref, field)
+        {:entire_data, objs} ->
+          meta =
+            [{:add, parent_ref, field, Resolvers.start_marker(objs)}] ++
+              meta_delete_all(cache, parent_ref, field)
 
-        {objs, meta, nil}
+          {objs, meta, nil}
 
-      {:last_data, objs} ->
-        meta =
-          [{:del, parent_ref, field, step.prev_chunk_end}] ++
-            meta_delete_all(res.context[:cache], parent_ref, field,
-              less_than: step.prev_chunk_end.val
-            )
+        {:last_data, objs} ->
+          meta =
+            [{:del, parent_ref, field, step.prev_chunk_end}] ++
+              meta_delete_all(cache, parent_ref, field, less_than: step.prev_chunk_end.val)
 
-        {objs, meta, nil}
+          {objs, meta, nil}
 
-      # no gap or gap not closed -> continue with this marker
-      {:continue, objs, new_chunk_end} ->
-        meta = [
-          first_meta(step, resolved, parent_ref, field),
-          {:add, parent_ref, field, new_chunk_end}
-        ]
+        # no gap or gap not closed -> continue with this marker
+        {:continue, objs, new_chunk_end} ->
+          meta = [
+            first_meta(step, resolved, parent_ref, field),
+            {:add, parent_ref, field, new_chunk_end}
+          ]
 
-        next = %{step | prev_chunk_end: new_chunk_end, count: step.count + length(objs)}
+          next = %{step | prev_chunk_end: new_chunk_end, count: step.count + length(objs)}
 
-        {objs, meta, next}
+          {objs, meta, next}
 
-      # gap closed -> look up the next chunk start in next iteration
-      {:gap_closed, objs} ->
-        meta = [
-          first_meta(step, resolved, parent_ref, field),
-          {:del, parent_ref, field, step.next_chunk_start}
-        ]
+        # gap closed -> look up the next chunk start in next iteration
+        {:gap_closed, objs} ->
+          meta = [
+            first_meta(step, resolved, parent_ref, field),
+            {:del, parent_ref, field, step.next_chunk_start}
+          ]
 
-        next = %{
-          step
-          | prev_chunk_end: :not_loaded,
-            next_chunk_start: :not_loaded,
-            refreshed: true,
-            count: step.count + length(objs)
-        }
+          next = %{
+            step
+            | prev_chunk_end: :not_loaded,
+              next_chunk_start: :not_loaded,
+              refreshed: true,
+              count: step.count + length(objs)
+          }
 
-        {objs, meta, next}
-    end
-    |> case do
-      {value, meta, nil} ->
-        %{
-          res
-          | acc: Map.delete(res.acc, __MODULE__) |> Map.put(:meta, meta)
-        }
-        |> Absinthe.Resolution.put_result({:ok, value})
+          {objs, meta, next}
+      end
 
-      {value, meta, next} ->
-        new_acc = %{
-          acc
-          | prev_chunk_end: next.prev_chunk_end,
-            next_chunk_start: next.next_chunk_start,
-            refreshed: next.refreshed,
-            count: next.count
-        }
-
-        %{
-          res
-          | acc: Map.put(res.acc, __MODULE__, new_acc) |> Map.put(:meta, meta),
-            middleware: [{__MODULE__, fun} | res.middleware]
-            # middleware: [{__MODULE__, {fun, end_marker}} | res.middleware]
-        }
-        |> Absinthe.Resolution.put_result({:ok, value})
-    end
+    %{
+      res
+      | acc: Map.put(res.acc, __MODULE__, next) |> Map.put(:meta, meta),
+        middleware: [{__MODULE__, fun} | res.middleware]
+        # middleware: [{__MODULE__, {fun, next}} | res.middleware]
+    }
+    |> Absinthe.Resolution.put_result({:ok, value})
   end
 
   # ... skip otherwise
@@ -168,31 +148,36 @@ defmodule Weaver.Absinthe.Middleware.Continue do
       Resolvers.id_for(obj) != marker.ref.id
   end
 
-  defp get_markers(nil, _, _, _, prev_chunk_end) do
-    {prev_chunk_end, nil}
+  defp load_markers(step = %{next_chunk_start: val}, _cache, _parent_ref, _field)
+       when val != :not_loaded do
+    step
   end
 
-  defp get_markers(_cache, _step, nil, _field, prev_chunk_end) do
-    {prev_chunk_end, nil}
+  defp load_markers(step, nil, _parent_ref, _field) do
+    %{step | next_chunk_start: nil}
   end
 
-  defp get_markers(cache, %{refresh: true, refreshed: false}, parent_ref, field, prev_chunk_end) do
+  defp load_markers(step, _cache, nil, _field) do
+    %{step | next_chunk_start: nil}
+  end
+
+  defp load_markers(step = %{refresh: true, refreshed: false}, cache, parent_ref, field) do
     next_chunk_start =
       markers!(cache, parent_ref, field, limit: 1)
       |> List.first()
 
-    {prev_chunk_end, next_chunk_start}
+    %{step | next_chunk_start: next_chunk_start}
   end
 
-  defp get_markers(cache, %{backfill: true}, parent_ref, field, prev_chunk_end) do
+  defp load_markers(step = %{backfill: true}, cache, parent_ref, field) do
     markers!(cache, parent_ref, field, limit: 3)
     |> Enum.split_while(&(&1.type != :chunk_end))
     |> case do
       {_refresh_end, [prev_chunk_end | rest]} ->
-        {prev_chunk_end, List.first(rest)}
+        %{step | prev_chunk_end: prev_chunk_end, next_chunk_start: List.first(rest)}
 
       _else ->
-        {prev_chunk_end, nil}
+        %{step | next_chunk_start: nil}
     end
   end
 
