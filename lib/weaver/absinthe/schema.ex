@@ -72,6 +72,11 @@ defmodule Weaver.Absinthe.Schema do
     end
   end
 
+  def middleware(middleware, _field, _) do
+    middleware
+    |> Absinthe.Pipeline.without(Absinthe.Middleware.Telemetry)
+  end
+
   defp dispatched(field) do
     fn obj, _, _ ->
       fun = fn prev_end_marker ->
