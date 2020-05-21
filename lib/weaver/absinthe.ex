@@ -7,6 +7,14 @@ defmodule Weaver.Absinthe do
   @resolution_phase Absinthe.Phase.Document.Execution.Resolution
 
   def run(document, schema, options \\ []) do
+    context =
+      Keyword.get(options, :context, %{})
+      |> Map.put_new(:cache, Keyword.get(options, :cache, nil))
+      |> Map.put_new(:refresh, Keyword.get(options, :refresh, true))
+      |> Map.put_new(:backfill, Keyword.get(options, :backfill, true))
+
+    options = Keyword.put(options, :context, context)
+
     pipeline =
       schema
       |> pipeline(options)

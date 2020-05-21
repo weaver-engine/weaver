@@ -8,8 +8,6 @@ defmodule Weaver.Absinthe.Middleware.Continue do
   defstruct [
     :prev_chunk_end,
     next_chunk_start: :not_loaded,
-    refresh: true,
-    backfill: true,
     refreshed: false,
     count: 0
   ]
@@ -17,8 +15,6 @@ defmodule Weaver.Absinthe.Middleware.Continue do
   @type t() :: %__MODULE__{
           prev_chunk_end: Marker.t() | nil | :not_loaded,
           next_chunk_start: Marker.t() | nil | :not_loaded,
-          refresh: boolean(),
-          backfill: boolean(),
           refreshed: boolean(),
           count: non_neg_integer()
         }
@@ -27,20 +23,13 @@ defmodule Weaver.Absinthe.Middleware.Continue do
 
   # call resolver function only if this is the resolution part for the current step
   def call(%{state: :suspended, acc: %{resolution: path}, path: path} = res, fun) do
-    cache = res.context[:cache]
-
-    parent_ref =
-      case res.source do
-        nil -> nil
-        empty when empty == %{} -> nil
-        parent_obj -> Ref.from(parent_obj)
-      end
-
+    cache = res.context.cache
+    parent_ref = res.source && Ref.from(res.source)
     [%Absinthe.Blueprint.Document.Field{name: field} | _] = path
 
     step =
       Map.get(res.acc, __MODULE__, %__MODULE__{})
-      |> load_markers(cache, parent_ref, field)
+      |> load_markers(res.context, cache, parent_ref, field)
 
     resolved = fun.(step.prev_chunk_end)
 
@@ -148,20 +137,20 @@ defmodule Weaver.Absinthe.Middleware.Continue do
       Resolvers.id_for(obj) != marker.ref.id
   end
 
-  defp load_markers(step = %{next_chunk_start: val}, _cache, _parent_ref, _field)
+  defp load_markers(step = %{next_chunk_start: val}, _opts, _cache, _parent_ref, _field)
        when val != :not_loaded do
     step
   end
 
-  defp load_markers(step, nil, _parent_ref, _field) do
+  defp load_markers(step, _opts, nil, _parent_ref, _field) do
     %{step | next_chunk_start: nil}
   end
 
-  defp load_markers(step, _cache, nil, _field) do
+  defp load_markers(step, _opts, _cache, nil, _field) do
     %{step | next_chunk_start: nil}
   end
 
-  defp load_markers(step = %{refresh: true, refreshed: false}, cache, parent_ref, field) do
+  defp load_markers(step = %{refreshed: false}, %{refresh: true}, cache, parent_ref, field) do
     next_chunk_start =
       markers!(cache, parent_ref, field, limit: 1)
       |> List.first()
@@ -169,7 +158,7 @@ defmodule Weaver.Absinthe.Middleware.Continue do
     %{step | next_chunk_start: next_chunk_start}
   end
 
-  defp load_markers(step = %{backfill: true}, cache, parent_ref, field) do
+  defp load_markers(step, %{backfill: true}, cache, parent_ref, field) do
     markers!(cache, parent_ref, field, limit: 3)
     |> Enum.split_while(&(&1.type != :chunk_end))
     |> case do
@@ -188,7 +177,6 @@ defmodule Weaver.Absinthe.Middleware.Continue do
   end
 
   defp markers!(mod, parent_ref, field, opts) do
-    IO.inspect({parent_ref, field}, label: "MARKERS")
     mod.markers!(parent_ref, field, opts)
   end
 end
