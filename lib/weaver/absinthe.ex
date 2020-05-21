@@ -1,6 +1,8 @@
 defmodule Weaver.Absinthe do
   alias Absinthe.Pipeline
 
+  alias Weaver.Absinthe.Middleware.Continue
+
   @result_phase Weaver.Absinthe.Phase.Document.Result
   @resolution_phase Absinthe.Phase.Document.Execution.Resolution
 
