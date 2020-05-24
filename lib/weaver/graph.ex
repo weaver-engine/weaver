@@ -127,16 +127,13 @@ defmodule Weaver.Graph do
 
   @impl GenServer
   def handle_call({:store, tuples}, _from, state) do
-    {del_tuples, tuples} = Enum.split_with(tuples, &(elem(&1, 0) == :del))
+    {del_tuples, add_tuples} = Enum.split_with(tuples, &(elem(&1, 0) == :del))
 
     varnames = varnames_for(tuples)
     query = upsert_query_for(varnames)
 
-    del_varnames = varnames_for(del_tuples)
-    del_query = upsert_query_for(del_varnames)
-
-    statements =
-      tuples
+    add_statements =
+      add_tuples
       |> Enum.flat_map(fn
         {:add, subject, predicate, marker = %Marker{}} ->
           sub_var = property(subject, varnames)
@@ -179,10 +176,10 @@ defmodule Weaver.Graph do
       del_tuples
       |> Enum.flat_map(fn
         {:del, subject, predicate, marker = %Marker{}} ->
-          sub_var = property(subject, del_varnames)
-          ref_var = property(marker.ref, del_varnames)
-          val_var = property(marker.val, del_varnames)
-          marker_var = property(marker, del_varnames)
+          sub_var = property(subject, varnames)
+          ref_var = property(marker.ref, varnames)
+          val_var = property(marker.val, varnames)
+          marker_var = property(marker, varnames)
           type_str = marker_type_str(marker.type)
 
           [
@@ -197,34 +194,24 @@ defmodule Weaver.Graph do
           []
       end)
 
-    statement =
-      Enum.reduce(varnames, statements, fn
-        {%Ref{id: id}, varname}, statements ->
-          ["uid(#{varname}) <id> #{inspect(id)} ." | statements]
+    id_statements =
+      Enum.flat_map(varnames, fn
+        {%Ref{id: id}, varname} ->
+          ["uid(#{varname}) <id> #{inspect(id)} ."]
 
-        {%Marker{}, _varname}, statements ->
-          statements
+        {%Marker{}, _varname} ->
+          []
       end)
-      |> Enum.join("\n")
-
-    del_statement =
-      del_statements
-      |> Enum.join("\n")
 
     result =
-      case {statement, del_statement} do
-        {"", ""} ->
-          :ok
-
-        {"", del_statement} ->
-          {:ok, _} = Dlex.delete(Dlex, del_query, del_statement, timeout: @timeout)
-
-        {statement, ""} ->
-          {:ok, _} = Dlex.mutate(Dlex, %{query: query}, statement, timeout: @timeout)
-
-        {statement, del_statement} ->
-          {:ok, _} = Dlex.delete(Dlex, del_query, del_statement, timeout: @timeout)
-          {:ok, _} = Dlex.mutate(Dlex, %{query: query}, statement, timeout: @timeout)
+      [delete: del_statements, set: id_statements ++ add_statements]
+      |> Enum.flat_map(fn
+        {_op, []} -> []
+        {op, list} -> [%{op => Enum.join(list, "\n")}]
+      end)
+      |> case do
+        [] -> :ok
+        mutations -> Dlex.mutate(Dlex, %{query: query}, mutations, timeout: @timeout)
       end
 
     {:reply, result, state}

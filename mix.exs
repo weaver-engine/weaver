@@ -35,7 +35,7 @@ defmodule Weaver.MixProject do
       {:absinthe, "~> 1.5.0"},
       {:jason, "~> 1.1"},
       {:graphql, "~> 0.15.0", hex: :graphql_erl},
-      {:dlex, "0.4.1"},
+      {:dlex, "0.5.0"},
       {:extwitter, "~> 0.9.0"},
 
       # must be added by the main app
