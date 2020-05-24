@@ -19,46 +19,46 @@ jobs:
         options: --health-cmd "curl -sSf http://localhost:8080/health"
 
     steps:
-    - uses: actions/checkout@v1
-    - uses: actions/setup-elixir@v1
-      with:
-        otp-version: ${{matrix.otp}}
-        elixir-version: ${{matrix.elixir}}
+      - uses: actions/checkout@v1
+      - uses: actions/setup-elixir@v1
+        with:
+          otp-version: ${{matrix.otp}}
+          elixir-version: ${{matrix.elixir}}
 
-    # Caching
-    - name: Dependencies cache
-      uses: actions/cache@v1
-      with:
-        path: deps
-        key: deps-${{ hashFiles('mix.lock') }}-${{matrix.elixir}}-${{matrix.otp}}
-    - name: Build cache
-      uses: actions/cache@v1
-      with:
-        path: _build
-        key: build-${{ hashFiles('mix.lock') }}-${{matrix.elixir}}-${{matrix.otp}}
+      # Caching
+      - name: Dependencies cache
+        uses: actions/cache@v1
+        with:
+          path: deps
+          key: deps-${{ hashFiles('mix.lock') }}-${{matrix.elixir}}-${{matrix.otp}}
+      - name: Build cache
+        uses: actions/cache@v1
+        with:
+          path: _build
+          key: build-${{ hashFiles('mix.lock') }}-${{matrix.elixir}}-${{matrix.otp}}
 
-    # Setup
-    - name: Install dependencies
-      run: mix deps.get
+      # Setup
+      - name: Install dependencies
+        run: mix deps.get
 
-    # Checks
-    - name: Compiler warnings (dev)
-      run: mix compile --warnings-as-errors --force
-    - name: Compiler warnings (test)
-      run: mix compile --warnings-as-errors --force
-      env:
-        MIX_ENV: test
-    - name: Code format
-      run: mix format --check-formatted --dry-run
-    - name: Code conventions (Credo)
-      run: mix credo
-    - name: Test suite
-      run: mix test
-      env:
-        WARNINGS_AS_ERRORS: "true"
-        DGRAPH_HOST: localhost
-        DGRAPH_PORT: ${{ job.services.dgraph.ports[9080] }}
-    - name: Generate docs
-      run: mix docs
-    - name: Static code analysis (Dialyzer)
-      run: mix dialyzer
+      # Checks
+      - name: Compiler warnings (dev)
+        run: mix compile --warnings-as-errors --force
+      - name: Compiler warnings (test)
+        run: mix compile --warnings-as-errors --force
+        env:
+          MIX_ENV: test
+      - name: Code format
+        run: mix format --check-formatted --dry-run
+      - name: Code conventions (Credo)
+        run: mix credo
+      - name: Test suite
+        run: mix test --trace
+        env:
+          WARNINGS_AS_ERRORS: "true"
+          DGRAPH_HOST: localhost
+          DGRAPH_PORT: ${{ job.services.dgraph.ports[9080] }}
+      - name: Generate docs
+        run: mix docs
+      - name: Static code analysis (Dialyzer)
+        run: mix dialyzer
