@@ -9,21 +9,15 @@ defmodule Weaver.Absinthe.Schema do
 
   interface :node do
     field(:id, non_null(:id))
-
-    resolve_type(fn
-      %User{}, _ -> :twitter_user
-      %Tweet{}, _ -> :tweet
-      _, _ -> nil
-    end)
   end
 
   object :twitter_user do
     interface(:node)
 
-    # is_type_of(fn
-    #   %User{} -> true
-    #   _other -> false
-    # end)
+    is_type_of(fn
+      %User{} -> true
+      _other -> false
+    end)
 
     field(:id, non_null(:id))
     field(:screen_name, non_null(:string))
@@ -36,10 +30,10 @@ defmodule Weaver.Absinthe.Schema do
   object :tweet do
     interface(:node)
 
-    # is_type_of(fn
-    #   %Tweet{} -> true
-    #   _other -> false
-    # end)
+    is_type_of(fn
+      %Tweet{} -> true
+      _other -> false
+    end)
 
     field(:id, non_null(:id))
     field(:text, non_null(:string), resolve: rsv(:full_text))
@@ -67,10 +61,8 @@ defmodule Weaver.Absinthe.Schema do
       arg(:id, :string)
 
       resolve(fn _, %{id: id}, _ ->
-        case Resolvers.retrieve_by_id(id) do
-          nil -> nil
-          other -> {:ok, other}
-        end
+        obj = Resolvers.retrieve_by_id(id)
+        {:ok, obj}
       end)
     end
   end
@@ -90,11 +82,7 @@ defmodule Weaver.Absinthe.Schema do
     end
   end
 
-  defp rsv(fun) when is_function(fun) do
-    fn obj, _, _ -> fun.(obj) end
-  end
-
   defp rsv(field) when is_atom(field) do
-    fn obj, _, _ -> {:ok, Map.get(obj, field)} end
+    fn obj, _, _ -> Map.fetch(obj, field) end
   end
 end
