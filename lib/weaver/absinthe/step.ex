@@ -1,4 +1,7 @@
 defmodule Weaver.Absinthe.Step do
+  @moduledoc """
+  Core processing logic for each chunk of streamed data.
+  """
   alias Weaver.{Marker, Resolvers}
 
   def process_resolved(resolved, step, cache, parent_ref, field) do
