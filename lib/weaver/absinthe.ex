@@ -1,4 +1,10 @@
 defmodule Weaver.Absinthe do
+  @moduledoc """
+  Entry point for weaving queries based on `Absinthe.Pipeline`.
+
+  Use `run/3` for initial execution, returning a `Weaver.Step.Result`.
+  Subsequent steps (the result's `dispatched` and `next` steps) can be executed via `resolve/3`.
+  """
   alias Absinthe.Pipeline
 
   alias Weaver.Absinthe.Middleware.Continue
@@ -30,37 +36,15 @@ defmodule Weaver.Absinthe do
 
   def pipeline(schema, options) do
     options = Keyword.put_new(options, :result_phase, @result_phase)
-    pipeline = Pipeline.for_document(schema, options)
-    # |> Pipeline.before(@resolution_phase)
 
-    # |> Pipeline.replace(
-    #   @resolution_phase,
-    #   Weaver.@resolution_phase
-    # )
-    pipeline
-    |> Enum.map(fn
-      {mod, _} -> mod
-      mod -> mod
-    end)
-    |> IO.inspect(label: "pipeline")
-
-    pipeline
+    Pipeline.for_document(schema, options)
     |> Pipeline.replace(Absinthe.Phase.Document.Result, @result_phase)
   end
 
   def resolve(blueprint, schema, options \\ []) do
-    # options = Pipeline.options(options)
-
     pipeline =
       pipeline(schema, options)
-      # |> Pipeline.from(Weaver.@resolution_phase)
-
       |> Pipeline.from(@resolution_phase)
-
-    # blueprint = update_in(blueprint.execution.acc, &Map.put(&1, :resolution, resolution))
-
-    # blueprint =
-    #   update_in(blueprint.execution.acc, &Map.delete(&1, Weaver.Absinthe.Middleware.Dispatch))
 
     case Absinthe.Pipeline.run(blueprint, pipeline) do
       {:ok, %{result: result}, _phases} ->

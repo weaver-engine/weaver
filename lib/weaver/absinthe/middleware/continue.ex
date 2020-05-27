@@ -3,6 +3,8 @@ defmodule Weaver.Absinthe.Middleware.Continue do
   This plugin enables asynchronous execution of a field.
   """
 
+  # credo:disable-for-this-file Credo.Check.Consistency.ParameterPatternMatching
+
   alias Weaver.{Marker, Ref, Resolvers}
 
   defstruct [
@@ -87,7 +89,6 @@ defmodule Weaver.Absinthe.Middleware.Continue do
       res
       | acc: Map.put(res.acc, __MODULE__, next) |> Map.put(:meta, meta),
         middleware: [{__MODULE__, fun} | res.middleware]
-        # middleware: [{__MODULE__, {fun, next}} | res.middleware]
     }
     |> Absinthe.Resolution.put_result({:ok, value})
   end

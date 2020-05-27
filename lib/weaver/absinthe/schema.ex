@@ -1,4 +1,7 @@
 defmodule Weaver.Absinthe.Schema do
+  @moduledoc """
+  GraphQL schema for testing fetching data from Twitter.
+  """
   use Absinthe.Schema
 
   alias ExTwitter.Model.{Tweet, User}
@@ -81,10 +84,8 @@ defmodule Weaver.Absinthe.Schema do
     fn obj, _, _ ->
       fun = fn prev_end_marker ->
         Resolvers.dispatched(obj, field, prev_end_marker)
-        |> IO.inspect(label: field)
       end
 
-      # {:middleware, Absinthe.Middleware.Async, {fun, []}}
       {:middleware, Weaver.Absinthe.Middleware.Dispatch, fun}
     end
   end

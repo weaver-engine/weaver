@@ -69,19 +69,11 @@ defmodule Weaver.Absinthe.AbsintheTest do
              {%Weaver.Ref{id: "TwitterUser:elixirdigest"}, "screenName", "elixirdigest"}
            ]
 
-    assert Result.meta(result) == []
-
-    # |> IO.inspect()
-
-    require IEx
-    IEx.pry()
-
+    assert [] = Result.meta(result)
     [disp_favs, disp_tweets] = Result.dispatched(result)
+    refute Result.next(result)
 
-    assert Result.next(result) == nil
-    assert Result.meta(result) == []
-
-    IO.puts("\n\nFAVORITES\n-==-0=-=-=-=-=-\n\n")
+    # FAVORITES
     {:ok, result_favs} = Weaver.Absinthe.resolve(disp_favs, Schema)
 
     [fav11, fav10 | _] = favorites
@@ -102,10 +94,10 @@ defmodule Weaver.Absinthe.AbsintheTest do
               Marker.chunk_end("Tweet:10", 10)}
            ]
 
-    assert Result.dispatched(result_favs) == []
+    assert [] = Result.dispatched(result_favs)
     assert next_favs = Result.next(result_favs)
 
-    IO.puts("\n\nFAVORITES 2\n-==-0=-=-=-=-=-\n\n")
+    # FAVORITES 2
     Mox.expect(Twitter, :favorites, twitter_mock_for(user, favorites, max_id: 9))
     {:ok, result_favs2} = Weaver.Absinthe.resolve(next_favs, Schema)
 
@@ -127,24 +119,24 @@ defmodule Weaver.Absinthe.AbsintheTest do
               Marker.chunk_end("Tweet:8", 8)}
            ]
 
-    assert Result.dispatched(result_favs2) == []
+    assert [] = Result.dispatched(result_favs2)
     assert next_favs2 = Result.next(result_favs2)
 
-    IO.puts("\n\nFAVORITES 3\n-==-0=-=-=-=-=-\n\n")
+    # FAVORITES 3
     Mox.expect(Twitter, :favorites, twitter_mock_for(user, favorites, max_id: 7))
     {:ok, result_favs3} = Weaver.Absinthe.resolve(next_favs2, Schema)
 
-    assert Result.data(result_favs3) == []
+    assert [] = Result.data(result_favs3)
 
     assert Result.meta(result_favs3) == [
              {:del, %Weaver.Ref{id: "TwitterUser:elixirdigest"}, "favorites",
               Marker.chunk_end("Tweet:8", 8)}
            ]
 
-    assert Result.dispatched(result_favs3) == []
-    assert Result.next(result_favs3) == nil
+    assert [] = Result.dispatched(result_favs3)
+    refute Result.next(result_favs3)
 
-    IO.puts("\n\nTWEETS\n-==-0=-=-=-=-=-\n\n")
+    # TWEETS
     tweet1 = build(ExTwitter.Model.Tweet, id: 35)
     tweet2 = build(ExTwitter.Model.Tweet, id: 21)
     Mox.expect(Twitter, :user_timeline, fn _ -> [tweet1, tweet2] end)
@@ -169,7 +161,7 @@ defmodule Weaver.Absinthe.AbsintheTest do
     assert [disp_retweets1, disp_retweets2] = Result.dispatched(result_tweets)
     assert Result.next(result_tweets)
 
-    IO.puts("\n\nRETWEETS 1a\n-==-0=-=-=-=-=-\n\n")
+    # RETWEETS 1a
     retweet1 = build(ExTwitter.Model.Tweet)
     tweet1_id = tweet1.id
     Mox.expect(Twitter, :retweets, fn ^tweet1_id, _ -> [retweet1] end)
@@ -188,10 +180,10 @@ defmodule Weaver.Absinthe.AbsintheTest do
               Marker.chunk_end("Tweet:#{retweet1.id}", retweet1.id)}
            ]
 
-    assert Result.dispatched(result_retweets1) == []
+    assert [] = Result.dispatched(result_retweets1)
     assert next_retweets1 = Result.next(result_retweets1)
 
-    IO.puts("\n\nRETWEETS 2\n-==-0=-=-=-=-=-\n\n")
+    # RETWEETS 2
     retweet2 = build(ExTwitter.Model.Tweet)
     tweet2_id = tweet2.id
     Mox.expect(Twitter, :retweets, fn ^tweet2_id, _ -> [retweet2] end)
@@ -210,39 +202,39 @@ defmodule Weaver.Absinthe.AbsintheTest do
               Marker.chunk_end("Tweet:#{retweet2.id}", retweet2.id)}
            ]
 
-    assert Result.dispatched(result_retweets2) == []
+    assert [] = Result.dispatched(result_retweets2)
     assert next_retweets2 = Result.next(result_retweets2)
 
-    IO.puts("\n\nRETWEETS 1b\n-==-0=-=-=-=-=-\n\n")
+    # RETWEETS 1b
     Mox.expect(Twitter, :retweets, fn ^tweet1_id, _ -> [] end)
     {:ok, result_retweets1b} = Weaver.Absinthe.resolve(next_retweets1, Schema)
 
-    assert Result.data(result_retweets1b) == []
+    assert [] = Result.data(result_retweets1b)
 
     assert Result.meta(result_retweets1b) == [
              {:del, %Weaver.Ref{id: "Tweet:#{tweet1.id}"}, "retweets",
               Marker.chunk_end("Tweet:#{retweet1.id}", retweet1.id)}
            ]
 
-    assert Result.dispatched(result_retweets1b) == []
-    assert Result.next(result_retweets1b) == nil
+    assert [] = Result.dispatched(result_retweets1b)
+    refute Result.next(result_retweets1b)
 
-    IO.puts("\n\nRETWEETS 2b\n-==-0=-=-=-=-=-\n\n")
+    # RETWEETS 2b
     Mox.expect(Twitter, :retweets, fn ^tweet2_id, _ -> [] end)
     {:ok, result_retweets2b} = Weaver.Absinthe.resolve(next_retweets2, Schema)
 
-    assert Result.data(result_retweets2b) == []
+    assert [] = Result.data(result_retweets2b)
 
     assert Result.meta(result_retweets2b) == [
              {:del, %Weaver.Ref{id: "Tweet:#{tweet2.id}"}, "retweets",
               Marker.chunk_end("Tweet:#{retweet2.id}", retweet2.id)}
            ]
 
-    assert Result.dispatched(result_retweets2b) == []
-    assert Result.next(result_retweets2b) == nil
+    assert [] = Result.dispatched(result_retweets2b)
+    refute Result.next(result_retweets2b)
   end
 
-  test "fails on invalid query", %{user: user, favorites: favorites} do
+  test "fails on invalid query" do
     {:ok, {:validation_failed, _}} =
       @invalid_query
       |> Weaver.Absinthe.run(Schema)
