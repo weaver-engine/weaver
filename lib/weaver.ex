@@ -54,15 +54,19 @@ defmodule Weaver do
   end
 
   def prepare(query, opts \\ []) do
-    {ast, fun_env} = parse_query(query)
+    with {:ok, ast} <- :graphql.parse(query),
+         {:ok, %{ast: ast, fun_env: fun_env}} <- :graphql.type_check(ast),
+         :ok <- :graphql.validate(ast) do
+      step = %Step{
+        ast: ast,
+        fun_env: fun_env,
+        cache: Keyword.get(opts, :cache),
+        operation: Keyword.get(opts, :operation, ""),
+        variables: Keyword.get(opts, :variables, %{})
+      }
 
-    %Step{
-      ast: ast,
-      fun_env: fun_env,
-      cache: Keyword.get(opts, :cache),
-      operation: Keyword.get(opts, :operation, ""),
-      variables: Keyword.get(opts, :variables, %{})
-    }
+      {:ok, step}
+    end
   end
 
   def weave(query, opts \\ [])
@@ -74,14 +78,6 @@ defmodule Weaver do
 
   def weave(step = %Step{}, _opts) do
     Step.process(step)
-  end
-
-  def parse_query(query) do
-    with {:ok, ast} <- :graphql.parse(query),
-         {:ok, %{ast: ast, fun_env: fun_env}} <- :graphql.type_check(ast),
-         :ok <- :graphql.validate(ast) do
-      {ast, fun_env}
-    end
   end
 
   def load_schema() do

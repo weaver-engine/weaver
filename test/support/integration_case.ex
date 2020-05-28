@@ -31,7 +31,7 @@ defmodule Weaver.IntegrationCase do
     Weaver.Graph.reset!()
   end
 
-  def weave_initial(step = %Weaver.Step{}, mock, fn_name, mock_fun) do
+  def weave_initial({:ok, step = %Weaver.Step{}}, mock, fn_name, mock_fun) do
     Mox.expect(mock, fn_name, mock_fun)
 
     weave_step(step)

@@ -62,7 +62,7 @@ defmodule WeaverTest do
 
   describe "prepare" do
     test "prepare" do
-      assert %Weaver.Step{} = Weaver.prepare(@query)
+      assert {:ok, %Weaver.Step{}} = Weaver.prepare(@query)
     end
   end
 
