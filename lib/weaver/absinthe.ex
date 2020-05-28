@@ -12,7 +12,7 @@ defmodule Weaver.Absinthe do
   @result_phase Weaver.Absinthe.Phase.Document.Result
   @resolution_phase Absinthe.Phase.Document.Execution.Resolution
 
-  def run(document, schema, options \\ []) do
+  def prepare(document, schema, options \\ []) do
     context =
       Keyword.get(options, :context, %{})
       |> Map.put_new(:cache, Keyword.get(options, :cache, nil))
@@ -24,10 +24,14 @@ defmodule Weaver.Absinthe do
     pipeline =
       schema
       |> pipeline(options)
+      |> Pipeline.without(@resolution_phase)
 
     case Absinthe.Pipeline.run(document, pipeline) do
-      {:ok, %{result: result}, _phases} ->
-        {:ok, result}
+      {:ok, %{result: {:validation_failed, errors}}, _phases} ->
+        {:error, {:validation_failed, errors}}
+
+      {:ok, blueprint, _phases} ->
+        {:ok, blueprint}
 
       {:error, msg, _phases} ->
         {:error, msg}
@@ -41,7 +45,7 @@ defmodule Weaver.Absinthe do
     |> Pipeline.replace(Absinthe.Phase.Document.Result, @result_phase)
   end
 
-  def resolve(blueprint, schema, options \\ []) do
+  def weave(blueprint, schema, options \\ []) do
     pipeline =
       pipeline(schema, options)
       |> Pipeline.from(@resolution_phase)
