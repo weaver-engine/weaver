@@ -72,8 +72,9 @@ defmodule Weaver do
   def weave(query, opts \\ [])
 
   def weave(query, opts) when is_binary(query) do
-    prepare(query, opts)
-    |> weave()
+    with {:ok, step} <- prepare(query, opts) do
+      weave(step)
+    end
   end
 
   def weave(step = %Step{}, _opts) do
