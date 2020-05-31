@@ -45,9 +45,9 @@ defmodule Weaver.Absinthe do
     |> Pipeline.replace(Absinthe.Phase.Document.Result, @result_phase)
   end
 
-  def weave(blueprint, schema, options \\ []) do
+  def weave(blueprint, options \\ []) do
     pipeline =
-      pipeline(schema, options)
+      pipeline(blueprint.schema, options)
       |> Pipeline.from(@resolution_phase)
 
     case Absinthe.Pipeline.run(blueprint, pipeline) do
