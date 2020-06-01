@@ -19,7 +19,7 @@ defmodule Weaver.Absinthe.Schema do
       _other -> false
     end)
 
-    field(:id, non_null(:id))
+    field(:id, non_null(:id), resolve: &weaver_id/3)
     field(:screen_name, non_null(:string))
     field(:favorites_count, non_null(:integer), resolve: rsv(:favourites_count))
     field(:favorites, non_null(list_of(non_null(:tweet))), resolve: dispatched("favorites"))
@@ -35,7 +35,7 @@ defmodule Weaver.Absinthe.Schema do
       _other -> false
     end)
 
-    field(:id, non_null(:id))
+    field(:id, non_null(:id), resolve: &weaver_id/3)
     field(:text, non_null(:string), resolve: rsv(:full_text))
     field(:published_at, non_null(:string), resolve: rsv(:created_at))
     field(:likes_count, non_null(:integer), resolve: rsv(:favorite_count))
@@ -84,5 +84,9 @@ defmodule Weaver.Absinthe.Schema do
 
   defp rsv(field) when is_atom(field) do
     fn obj, _, _ -> Map.fetch(obj, field) end
+  end
+
+  defp weaver_id(obj, _, _) do
+    {:ok, Resolvers.id_for(obj)}
   end
 end

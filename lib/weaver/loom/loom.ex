@@ -74,28 +74,16 @@ defmodule Weaver.Loom do
     Supervisor.start_link(__MODULE__, :ok, name: __MODULE__)
   end
 
-  def prepare(query, opts \\ [], callback)
+  def prepare(query, schema, opts \\ [], callback)
 
-  def prepare(query, opts, callback) when is_binary(query) do
-    with {:ok, step} <- Weaver.prepare(query, opts) do
-      prepare(step, opts, callback)
+  def prepare(query, schema, opts, callback) when is_binary(query) do
+    with {:ok, step} <- Weaver.Absinthe.prepare(query, schema, opts) do
+      prepare(step, schema, opts, callback)
     end
   end
 
-  def prepare(step = %Weaver.Step{}, _opts, callback) do
+  def prepare(step = %Absinthe.Blueprint{}, _schema, _opts, callback) do
     %Event{step: step, callback: callback}
-  end
-
-  def weave(query, opts \\ [], callback)
-
-  def weave(query, opts, callback) when is_binary(query) do
-    prepare(query, opts, callback)
-    |> weave()
-  end
-
-  def weave(step = %Weaver.Step{}, opts, callback) do
-    prepare(step, opts, callback)
-    |> weave()
   end
 
   def weave(event = %Event{}) do

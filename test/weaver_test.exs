@@ -62,7 +62,7 @@ defmodule WeaverTest do
 
   describe "prepare" do
     test "prepare" do
-      assert {:ok, %Weaver.Step{}} = Weaver.prepare(@query)
+      assert {:ok, _} = Weaver.Absinthe.prepare(@query, Weaver.Absinthe.Schema)
     end
   end
 
@@ -207,7 +207,7 @@ defmodule WeaverTest do
       [fav11, fav10, fav9, fav8 | _] = favorites
 
       @query
-      |> Weaver.prepare()
+      |> Weaver.Absinthe.prepare(Weaver.Absinthe.Schema)
 
       # user
       |> weave_initial(Twitter, :user, fn "elixirdigest" -> user end)
@@ -306,7 +306,7 @@ defmodule WeaverTest do
       [fav21, _, _, _, _, _, fav15, fav14, fav13, _, fav11 | _] = favorites
 
       @query
-      |> Weaver.prepare(cache: Weaver.Graph)
+      |> Weaver.Absinthe.prepare(Weaver.Absinthe.Schema, cache: Weaver.Graph)
       |> weave_initial(Twitter, :user, fn "elixirdigest" -> user end)
       |> assert_has_data([
         {%Ref{id: "TwitterUser:elixirdigest"}, "screenName", "elixirdigest"},
@@ -454,7 +454,7 @@ defmodule WeaverTest do
       [fav21 | _] = favorites
 
       @query
-      |> Weaver.prepare(cache: Weaver.Graph)
+      |> Weaver.Absinthe.prepare(Weaver.Absinthe.Schema, cache: Weaver.Graph)
       |> weave_initial(Twitter, :user, fn "elixirdigest" -> user end)
 
       # favorites initial
@@ -512,7 +512,7 @@ defmodule WeaverTest do
       [fav21, fav20 | _] = favorites
 
       @query
-      |> Weaver.prepare(cache: Weaver.Graph)
+      |> Weaver.Absinthe.prepare(Weaver.Absinthe.Schema, cache: Weaver.Graph)
       |> weave_initial(Twitter, :user, fn "elixirdigest" -> user end)
 
       # favorites initial
@@ -549,7 +549,7 @@ defmodule WeaverTest do
       favorites = Enum.take(favorites, 1)
 
       @query
-      |> Weaver.prepare(cache: Weaver.Graph)
+      |> Weaver.Absinthe.prepare(Weaver.Absinthe.Schema, cache: Weaver.Graph)
       |> weave_initial(Twitter, :user, fn "elixirdigest" -> user end)
 
       # favorites initial
@@ -602,7 +602,7 @@ defmodule WeaverTest do
       favorites = Enum.take(favorites, 7)
 
       @query
-      |> Weaver.prepare(cache: Weaver.Graph)
+      |> Weaver.Absinthe.prepare(Weaver.Absinthe.Schema, cache: Weaver.Graph)
       |> weave_initial(Twitter, :user, fn "elixirdigest" -> user end)
 
       # favorites initial
@@ -641,7 +641,7 @@ defmodule WeaverTest do
 
     test "deletes all markers with all tweets deleted", %{user: user} do
       @query
-      |> Weaver.prepare(cache: Weaver.Graph)
+      |> Weaver.Absinthe.prepare(Weaver.Absinthe.Schema, cache: Weaver.Graph)
       |> weave_initial(Twitter, :user, fn "elixirdigest" -> user end)
 
       # favorites initial

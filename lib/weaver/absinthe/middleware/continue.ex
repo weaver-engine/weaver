@@ -30,20 +30,28 @@ defmodule Weaver.Absinthe.Middleware.Continue do
     parent_ref = res.source && Ref.from(res.source)
     [%Absinthe.Blueprint.Document.Field{name: field} | _] = path
 
-    step =
-      Map.get(res.acc, __MODULE__, %__MODULE__{})
-      |> Step.load_markers(res.context, cache, parent_ref, field)
+    Map.get(res.acc, __MODULE__, %__MODULE__{})
+    |> Step.load_markers(res.context, cache, parent_ref, field)
+    |> case do
+      %{prev_chunk_end: :not_loaded} ->
+        %{
+          res
+          | acc: Map.put(res.acc, __MODULE__, nil) |> Map.put(:meta, [])
+        }
+        |> Absinthe.Resolution.put_result({:ok, []})
 
-    resolved = fun.(step.prev_chunk_end)
+      step ->
+        resolved = fun.(step.prev_chunk_end)
 
-    {value, meta, next} = Step.process_resolved(resolved, step, cache, parent_ref, field)
+        {value, meta, next} = Step.process_resolved(resolved, step, cache, parent_ref, field)
 
-    %{
-      res
-      | acc: Map.put(res.acc, __MODULE__, next) |> Map.put(:meta, meta),
-        middleware: [{__MODULE__, fun} | res.middleware]
-    }
-    |> Absinthe.Resolution.put_result({:ok, value})
+        %{
+          res
+          | acc: Map.put(res.acc, __MODULE__, next) |> Map.put(:meta, meta),
+            middleware: [{__MODULE__, fun} | res.middleware]
+        }
+        |> Absinthe.Resolution.put_result({:ok, value})
+    end
   end
 
   # ... skip otherwise
