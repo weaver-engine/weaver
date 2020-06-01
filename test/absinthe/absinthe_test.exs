@@ -63,9 +63,9 @@ defmodule Weaver.Absinthe.AbsintheTest do
 
     {:ok, blueprint} =
       @query
-      |> Weaver.Absinthe.prepare(Schema)
+      |> Weaver.prepare(Schema)
 
-    {:ok, result} = Weaver.Absinthe.weave(blueprint)
+    {:ok, result} = Weaver.weave(blueprint)
 
     assert Result.data(result) == [
              {%Weaver.Ref{id: "TwitterUser:elixirdigest"}, "screenName", "elixirdigest"}
@@ -76,7 +76,7 @@ defmodule Weaver.Absinthe.AbsintheTest do
     refute Result.next(result)
 
     # FAVORITES
-    {:ok, result_favs} = Weaver.Absinthe.weave(disp_favs)
+    {:ok, result_favs} = Weaver.weave(disp_favs)
 
     [fav11, fav10 | _] = favorites
 
@@ -101,7 +101,7 @@ defmodule Weaver.Absinthe.AbsintheTest do
 
     # FAVORITES 2
     Mox.expect(Twitter, :favorites, twitter_mock_for(user, favorites, max_id: 9))
-    {:ok, result_favs2} = Weaver.Absinthe.weave(next_favs)
+    {:ok, result_favs2} = Weaver.weave(next_favs)
 
     [_, _, fav9, fav8 | _] = favorites
 
@@ -126,7 +126,7 @@ defmodule Weaver.Absinthe.AbsintheTest do
 
     # FAVORITES 3
     Mox.expect(Twitter, :favorites, twitter_mock_for(user, favorites, max_id: 7))
-    {:ok, result_favs3} = Weaver.Absinthe.weave(next_favs2)
+    {:ok, result_favs3} = Weaver.weave(next_favs2)
 
     assert [] = Result.data(result_favs3)
 
@@ -142,7 +142,7 @@ defmodule Weaver.Absinthe.AbsintheTest do
     tweet1 = build(ExTwitter.Model.Tweet, id: 35)
     tweet2 = build(ExTwitter.Model.Tweet, id: 21)
     Mox.expect(Twitter, :user_timeline, fn _ -> [tweet1, tweet2] end)
-    {:ok, result_tweets} = Weaver.Absinthe.weave(disp_tweets)
+    {:ok, result_tweets} = Weaver.weave(disp_tweets)
 
     assert Result.data(result_tweets) == [
              {%Weaver.Ref{id: "Tweet:#{tweet2.id}"}, "text", tweet2.full_text},
@@ -167,7 +167,7 @@ defmodule Weaver.Absinthe.AbsintheTest do
     retweet1 = build(ExTwitter.Model.Tweet)
     tweet1_id = tweet1.id
     Mox.expect(Twitter, :retweets, fn ^tweet1_id, _ -> [retweet1] end)
-    {:ok, result_retweets1} = Weaver.Absinthe.weave(disp_retweets1)
+    {:ok, result_retweets1} = Weaver.weave(disp_retweets1)
 
     assert Result.data(result_retweets1) == [
              {%Weaver.Ref{id: "Tweet:#{retweet1.id}"}, "text", retweet1.full_text},
@@ -189,7 +189,7 @@ defmodule Weaver.Absinthe.AbsintheTest do
     retweet2 = build(ExTwitter.Model.Tweet)
     tweet2_id = tweet2.id
     Mox.expect(Twitter, :retweets, fn ^tweet2_id, _ -> [retweet2] end)
-    {:ok, result_retweets2} = Weaver.Absinthe.weave(disp_retweets2)
+    {:ok, result_retweets2} = Weaver.weave(disp_retweets2)
 
     assert Result.data(result_retweets2) == [
              {%Weaver.Ref{id: "Tweet:#{retweet2.id}"}, "text", retweet2.full_text},
@@ -209,7 +209,7 @@ defmodule Weaver.Absinthe.AbsintheTest do
 
     # RETWEETS 1b
     Mox.expect(Twitter, :retweets, fn ^tweet1_id, _ -> [] end)
-    {:ok, result_retweets1b} = Weaver.Absinthe.weave(next_retweets1)
+    {:ok, result_retweets1b} = Weaver.weave(next_retweets1)
 
     assert [] = Result.data(result_retweets1b)
 
@@ -223,7 +223,7 @@ defmodule Weaver.Absinthe.AbsintheTest do
 
     # RETWEETS 2b
     Mox.expect(Twitter, :retweets, fn ^tweet2_id, _ -> [] end)
-    {:ok, result_retweets2b} = Weaver.Absinthe.weave(next_retweets2)
+    {:ok, result_retweets2b} = Weaver.weave(next_retweets2)
 
     assert [] = Result.data(result_retweets2b)
 
@@ -239,6 +239,6 @@ defmodule Weaver.Absinthe.AbsintheTest do
   test "fails on invalid query" do
     {:error, {:validation_failed, _}} =
       @invalid_query
-      |> Weaver.Absinthe.prepare(Schema)
+      |> Weaver.prepare(Schema)
   end
 end

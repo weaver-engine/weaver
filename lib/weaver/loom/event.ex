@@ -31,7 +31,7 @@ defmodule Weaver.Loom.Event do
           | {:error, any()}
   def process(event) do
     event.step
-    |> Weaver.Absinthe.weave()
+    |> Weaver.weave()
     |> safe_callback(event)
     |> case do
       {:ok, result, dispatch_assigns, next_assigns} ->

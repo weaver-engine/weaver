@@ -5,8 +5,7 @@ defmodule Weaver.Absinthe.Middleware.Continue do
 
   # credo:disable-for-this-file Credo.Check.Consistency.ParameterPatternMatching
 
-  alias Weaver.{Marker, Ref}
-  alias Weaver.Absinthe.Step
+  alias Weaver.{Marker, Ref, Step}
 
   defstruct [
     :prev_chunk_end,

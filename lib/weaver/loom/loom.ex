@@ -77,7 +77,7 @@ defmodule Weaver.Loom do
   def prepare(query, schema, opts \\ [], callback)
 
   def prepare(query, schema, opts, callback) when is_binary(query) do
-    with {:ok, step} <- Weaver.Absinthe.prepare(query, schema, opts) do
+    with {:ok, step} <- Weaver.prepare(query, schema, opts) do
       prepare(step, schema, opts, callback)
     end
   end

@@ -59,7 +59,7 @@ defmodule Weaver.IntegrationCase do
   end
 
   defp weave_step(step) do
-    {:ok, result} = Weaver.Absinthe.weave(step)
+    {:ok, result} = Weaver.weave(step)
 
     Mox.verify!()
 
