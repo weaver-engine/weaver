@@ -4,14 +4,14 @@ defmodule Weaver.Step.Result do
   returned as the result of `Weaver.Step.process/1`.
   """
 
-  alias Weaver.{Ref, Step}
+  alias Weaver.Ref
 
   @type t() :: {
           list(tuple()),
           list(tuple()),
           list(tuple()),
-          list(Step.t()),
-          Step.t() | nil
+          list(Absinthe.Blueprint.t()),
+          Absinthe.Blueprint.t() | nil
         }
 
   def empty() do
