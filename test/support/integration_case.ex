@@ -127,23 +127,53 @@ defmodule Weaver.IntegrationCase do
     end
   end
 
-  @doc "Matches the given expression against the result's `dispatched`."
-  defmacro assert_dispatched(result_expr, _match_expr) do
+  @doc "Matches the given expression against the result's `dispatched` paths."
+  defmacro assert_dispatched_paths(result_expr, match_expr) do
     quote do
       result = unquote(result_expr)
-      # unquote(match_expr) = Result.dispatched(result)
-      assert true
+
+      paths =
+        result
+        |> Result.dispatched()
+        |> Enum.map(fn
+          %{execution: %{acc: %{resolution: paths}}} -> paths
+        end)
+
+      assert unquote(match_expr) = paths
 
       result
     end
   end
 
-  @doc "Matches the given expression against the result's `next`."
-  defmacro assert_next(result_expr, _match_expr) do
+  @doc "Matches the given expression against the result's `next` path."
+  defmacro assert_next_path(result_expr, match_expr) do
     quote do
       result = unquote(result_expr)
-      # unquote(match_expr) = Result.next(result)
-      assert true
+
+      assert %{
+               execution: %{
+                 acc: %{
+                   resolution: unquote(match_expr)
+                 }
+               }
+             } = Result.next(result)
+
+      result
+    end
+  end
+
+  @doc "Matches the given expression against the result's `next` Weaver state."
+  defmacro assert_next_state(result_expr, match_expr) do
+    quote do
+      result = unquote(result_expr)
+
+      assert %{
+               execution: %{
+                 acc: %{
+                   Weaver.Absinthe.Middleware.Continue => unquote(match_expr)
+                 }
+               }
+             } = Result.next(result)
 
       result
     end
