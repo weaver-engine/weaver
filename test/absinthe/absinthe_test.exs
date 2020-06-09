@@ -3,8 +3,6 @@ defmodule Weaver.Absinthe.AbsintheTest do
 
   alias Weaver.ExTwitter.Mock, as: Twitter
   alias Weaver.Absinthe.Schema
-  alias Weaver.Step.Result
-  alias Weaver.Marker
 
   @query """
   query {
@@ -58,182 +56,145 @@ defmodule Weaver.Absinthe.AbsintheTest do
   end
 
   test "works", %{user: user, favorites: favorites} do
-    Mox.expect(Twitter, :user, fn "elixirdigest" -> user end)
-    Mox.expect(Twitter, :favorites, twitter_mock_for(user, favorites))
+    user_ref = %Ref{id: "TwitterUser:#{user.screen_name}"}
 
-    {:ok, blueprint} =
+    root_step =
       @query
       |> Weaver.prepare(Schema)
-
-    {:ok, result} = Weaver.weave(blueprint)
-
-    assert Result.data(result) == [
-             {%Weaver.Ref{id: "TwitterUser:elixirdigest"}, "screenName", "elixirdigest"}
-           ]
-
-    assert [] = Result.meta(result)
-    [disp_favs, disp_tweets] = Result.dispatched(result)
-    refute Result.next(result)
+      |> weave_initial(Twitter, :user, fn "elixirdigest" -> user end)
+      |> assert_data([
+        {user_ref, "screenName", "elixirdigest"}
+      ])
+      |> assert_meta([])
+      |> assert_dispatched_paths([
+        [%{name: "favorites"}, %{name: "node"}, %{name: nil}],
+        [%{name: "tweets"}, %{name: "node"}, %{name: nil}]
+      ])
+      |> refute_next()
 
     # FAVORITES
-    {:ok, result_favs} = Weaver.weave(disp_favs)
+    [fav11, fav10, fav9, fav8 | _] = favorites
 
-    [fav11, fav10 | _] = favorites
-
-    assert Result.data(result_favs) == [
-             {%Weaver.Ref{id: "Tweet:10"}, "text", fav10.full_text},
-             {%Weaver.Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-              %Weaver.Ref{id: "Tweet:10"}},
-             {%Weaver.Ref{id: "Tweet:11"}, "text", fav11.full_text},
-             {%Weaver.Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-              %Weaver.Ref{id: "Tweet:11"}}
-           ]
-
-    assert Result.meta(result_favs) == [
-             {:add, %Weaver.Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-              Marker.chunk_start("Tweet:11", 11)},
-             {:add, %Weaver.Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-              Marker.chunk_end("Tweet:10", 10)}
-           ]
-
-    assert [] = Result.dispatched(result_favs)
-    assert next_favs = Result.next(result_favs)
+    root_step
+    |> weave_dispatched(0, Twitter, :favorites, twitter_mock_for(user, favorites))
+    |> assert_data([
+      {%Ref{id: "Tweet:10"}, "text", fav10.full_text},
+      {user_ref, "favorites", %Ref{id: "Tweet:10"}},
+      {%Ref{id: "Tweet:11"}, "text", fav11.full_text},
+      {user_ref, "favorites", %Ref{id: "Tweet:11"}}
+    ])
+    |> assert_meta([
+      {:add, user_ref, "favorites", Marker.chunk_start("Tweet:11", 11)},
+      {:add, user_ref, "favorites", Marker.chunk_end("Tweet:10", 10)}
+    ])
+    |> assert_dispatched_paths([])
+    |> assert_next_path([%{name: "favorites"}, %{name: "node"}, %{name: nil}])
 
     # FAVORITES 2
-    Mox.expect(Twitter, :favorites, twitter_mock_for(user, favorites, max_id: 9))
-    {:ok, result_favs2} = Weaver.weave(next_favs)
-
-    [_, _, fav9, fav8 | _] = favorites
-
-    assert Result.data(result_favs2) == [
-             {%Weaver.Ref{id: "Tweet:8"}, "text", fav8.full_text},
-             {%Weaver.Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-              %Weaver.Ref{id: "Tweet:8"}},
-             {%Weaver.Ref{id: "Tweet:9"}, "text", fav9.full_text},
-             {%Weaver.Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-              %Weaver.Ref{id: "Tweet:9"}}
-           ]
-
-    assert Result.meta(result_favs2) == [
-             {:del, %Weaver.Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-              Marker.chunk_end("Tweet:10", 10)},
-             {:add, %Weaver.Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-              Marker.chunk_end("Tweet:8", 8)}
-           ]
-
-    assert [] = Result.dispatched(result_favs2)
-    assert next_favs2 = Result.next(result_favs2)
+    |> weave_next(Twitter, :favorites, twitter_mock_for(user, favorites, max_id: 9))
+    |> assert_data([
+      {%Ref{id: "Tweet:8"}, "text", fav8.full_text},
+      {user_ref, "favorites", %Ref{id: "Tweet:8"}},
+      {%Ref{id: "Tweet:9"}, "text", fav9.full_text},
+      {user_ref, "favorites", %Ref{id: "Tweet:9"}}
+    ])
+    |> assert_meta([
+      {:del, user_ref, "favorites", Marker.chunk_end("Tweet:10", 10)},
+      {:add, user_ref, "favorites", Marker.chunk_end("Tweet:8", 8)}
+    ])
+    |> assert_dispatched_paths([])
+    |> assert_next_path([%{name: "favorites"}, %{name: "node"}, %{name: nil}])
 
     # FAVORITES 3
-    Mox.expect(Twitter, :favorites, twitter_mock_for(user, favorites, max_id: 7))
-    {:ok, result_favs3} = Weaver.weave(next_favs2)
-
-    assert [] = Result.data(result_favs3)
-
-    assert Result.meta(result_favs3) == [
-             {:del, %Weaver.Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-              Marker.chunk_end("Tweet:8", 8)}
-           ]
-
-    assert [] = Result.dispatched(result_favs3)
-    refute Result.next(result_favs3)
+    |> weave_next(Twitter, :favorites, twitter_mock_for(user, favorites, max_id: 7))
+    |> assert_data([])
+    |> assert_meta([
+      {:del, user_ref, "favorites", Marker.chunk_end("Tweet:8", 8)}
+    ])
+    |> assert_dispatched_paths([])
+    |> refute_next()
 
     # TWEETS
     tweet1 = build(ExTwitter.Model.Tweet, id: 35)
     tweet2 = build(ExTwitter.Model.Tweet, id: 21)
-    Mox.expect(Twitter, :user_timeline, fn _ -> [tweet1, tweet2] end)
-    {:ok, result_tweets} = Weaver.weave(disp_tweets)
 
-    assert Result.data(result_tweets) == [
-             {%Weaver.Ref{id: "Tweet:#{tweet2.id}"}, "text", tweet2.full_text},
-             {%Weaver.Ref{id: "TwitterUser:elixirdigest"}, "tweets",
-              %Weaver.Ref{id: "Tweet:#{tweet2.id}"}},
-             {%Weaver.Ref{id: "Tweet:#{tweet1.id}"}, "text", tweet1.full_text},
-             {%Weaver.Ref{id: "TwitterUser:elixirdigest"}, "tweets",
-              %Weaver.Ref{id: "Tweet:#{tweet1.id}"}}
-           ]
-
-    assert Result.meta(result_tweets) == [
-             {:add, %Weaver.Ref{id: "TwitterUser:elixirdigest"}, "tweets",
-              Marker.chunk_start("Tweet:#{tweet1.id}", tweet1.id)},
-             {:add, %Weaver.Ref{id: "TwitterUser:elixirdigest"}, "tweets",
-              Marker.chunk_end("Tweet:#{tweet2.id}", tweet2.id)}
-           ]
-
-    assert [disp_retweets1, disp_retweets2] = Result.dispatched(result_tweets)
-    assert Result.next(result_tweets)
+    retweets_step =
+      root_step
+      |> weave_dispatched(1, Twitter, :user_timeline, fn _ -> [tweet1, tweet2] end)
+      |> assert_data([
+        {%Ref{id: "Tweet:#{tweet2.id}"}, "text", tweet2.full_text},
+        {user_ref, "tweets", %Ref{id: "Tweet:#{tweet2.id}"}},
+        {%Ref{id: "Tweet:#{tweet1.id}"}, "text", tweet1.full_text},
+        {user_ref, "tweets", %Ref{id: "Tweet:#{tweet1.id}"}}
+      ])
+      |> assert_meta([
+        {:add, user_ref, "tweets", Marker.chunk_start("Tweet:#{tweet1.id}", tweet1.id)},
+        {:add, user_ref, "tweets", Marker.chunk_end("Tweet:#{tweet2.id}", tweet2.id)}
+      ])
+      |> assert_dispatched_paths([
+        [%{name: "retweets"} | _],
+        [%{name: "retweets"} | _]
+      ])
+      |> assert_next_path([%{name: "tweets"}, %{name: "node"}, %{name: nil}])
+      |> assert_next_state(%{prev_chunk_end: %Marker{val: 21}})
 
     # RETWEETS 1a
     retweet1 = build(ExTwitter.Model.Tweet)
     tweet1_id = tweet1.id
-    Mox.expect(Twitter, :retweets, fn ^tweet1_id, _ -> [retweet1] end)
-    {:ok, result_retweets1} = Weaver.weave(disp_retweets1)
 
-    assert Result.data(result_retweets1) == [
-             {%Weaver.Ref{id: "Tweet:#{retweet1.id}"}, "text", retweet1.full_text},
-             {%Weaver.Ref{id: "Tweet:#{tweet1.id}"}, "retweets",
-              %Weaver.Ref{id: "Tweet:#{retweet1.id}"}}
-           ]
+    retweets_step
+    |> weave_dispatched(0, Twitter, :retweets, fn ^tweet1_id, _ -> [retweet1] end)
+    |> assert_data([
+      {%Ref{id: "Tweet:#{retweet1.id}"}, "text", retweet1.full_text},
+      {%Ref{id: "Tweet:#{tweet1.id}"}, "retweets", %Ref{id: "Tweet:#{retweet1.id}"}}
+    ])
+    |> assert_meta([
+      {:add, %Ref{id: "Tweet:#{tweet1.id}"}, "retweets",
+       Marker.chunk_start("Tweet:#{retweet1.id}", retweet1.id)},
+      {:add, %Ref{id: "Tweet:#{tweet1.id}"}, "retweets",
+       Marker.chunk_end("Tweet:#{retweet1.id}", retweet1.id)}
+    ])
+    |> assert_dispatched_paths([])
+    |> assert_next_path([%{name: "retweets"}, 0, %{name: "tweets"}, %{name: "node"}, %{name: nil}])
 
-    assert Result.meta(result_retweets1) == [
-             {:add, %Weaver.Ref{id: "Tweet:#{tweet1.id}"}, "retweets",
-              Marker.chunk_start("Tweet:#{retweet1.id}", retweet1.id)},
-             {:add, %Weaver.Ref{id: "Tweet:#{tweet1.id}"}, "retweets",
-              Marker.chunk_end("Tweet:#{retweet1.id}", retweet1.id)}
-           ]
-
-    assert [] = Result.dispatched(result_retweets1)
-    assert next_retweets1 = Result.next(result_retweets1)
+    # RETWEETS 1b
+    |> weave_next(Twitter, :retweets, fn ^tweet1_id, _ -> [] end)
+    |> assert_data([])
+    |> assert_meta([
+      {:del, %Ref{id: "Tweet:#{tweet1.id}"}, "retweets",
+       Marker.chunk_end("Tweet:#{retweet1.id}", retweet1.id)}
+    ])
+    |> assert_dispatched_paths([])
+    |> refute_next()
 
     # RETWEETS 2
     retweet2 = build(ExTwitter.Model.Tweet)
     tweet2_id = tweet2.id
-    Mox.expect(Twitter, :retweets, fn ^tweet2_id, _ -> [retweet2] end)
-    {:ok, result_retweets2} = Weaver.weave(disp_retweets2)
 
-    assert Result.data(result_retweets2) == [
-             {%Weaver.Ref{id: "Tweet:#{retweet2.id}"}, "text", retweet2.full_text},
-             {%Weaver.Ref{id: "Tweet:#{tweet2.id}"}, "retweets",
-              %Weaver.Ref{id: "Tweet:#{retweet2.id}"}}
-           ]
-
-    assert Result.meta(result_retweets2) == [
-             {:add, %Weaver.Ref{id: "Tweet:#{tweet2.id}"}, "retweets",
-              Marker.chunk_start("Tweet:#{retweet2.id}", retweet2.id)},
-             {:add, %Weaver.Ref{id: "Tweet:#{tweet2.id}"}, "retweets",
-              Marker.chunk_end("Tweet:#{retweet2.id}", retweet2.id)}
-           ]
-
-    assert [] = Result.dispatched(result_retweets2)
-    assert next_retweets2 = Result.next(result_retweets2)
-
-    # RETWEETS 1b
-    Mox.expect(Twitter, :retweets, fn ^tweet1_id, _ -> [] end)
-    {:ok, result_retweets1b} = Weaver.weave(next_retweets1)
-
-    assert [] = Result.data(result_retweets1b)
-
-    assert Result.meta(result_retweets1b) == [
-             {:del, %Weaver.Ref{id: "Tweet:#{tweet1.id}"}, "retweets",
-              Marker.chunk_end("Tweet:#{retweet1.id}", retweet1.id)}
-           ]
-
-    assert [] = Result.dispatched(result_retweets1b)
-    refute Result.next(result_retweets1b)
+    retweets_step
+    |> weave_dispatched(1, Twitter, :retweets, fn ^tweet2_id, _ -> [retweet2] end)
+    |> assert_data([
+      {%Ref{id: "Tweet:#{retweet2.id}"}, "text", retweet2.full_text},
+      {%Ref{id: "Tweet:#{tweet2.id}"}, "retweets", %Ref{id: "Tweet:#{retweet2.id}"}}
+    ])
+    |> assert_meta([
+      {:add, %Ref{id: "Tweet:#{tweet2.id}"}, "retweets",
+       Marker.chunk_start("Tweet:#{retweet2.id}", retweet2.id)},
+      {:add, %Ref{id: "Tweet:#{tweet2.id}"}, "retweets",
+       Marker.chunk_end("Tweet:#{retweet2.id}", retweet2.id)}
+    ])
+    |> assert_dispatched_paths([])
+    |> assert_next_path([%{name: "retweets"}, 1, %{name: "tweets"}, %{name: "node"}, %{name: nil}])
 
     # RETWEETS 2b
-    Mox.expect(Twitter, :retweets, fn ^tweet2_id, _ -> [] end)
-    {:ok, result_retweets2b} = Weaver.weave(next_retweets2)
-
-    assert [] = Result.data(result_retweets2b)
-
-    assert Result.meta(result_retweets2b) == [
-             {:del, %Weaver.Ref{id: "Tweet:#{tweet2.id}"}, "retweets",
-              Marker.chunk_end("Tweet:#{retweet2.id}", retweet2.id)}
-           ]
-
-    assert [] = Result.dispatched(result_retweets2b)
-    refute Result.next(result_retweets2b)
+    |> weave_next(Twitter, :retweets, fn ^tweet2_id, _ -> [] end)
+    |> assert_data([])
+    |> assert_meta([
+      {:del, %Ref{id: "Tweet:#{tweet2.id}"}, "retweets",
+       Marker.chunk_end("Tweet:#{retweet2.id}", retweet2.id)}
+    ])
+    |> assert_dispatched_paths([])
+    |> refute_next()
   end
 
   test "fails on invalid query" do

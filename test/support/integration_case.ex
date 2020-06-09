@@ -107,24 +107,18 @@ defmodule Weaver.IntegrationCase do
     end
   end
 
-  @doc "Matches the given expression against the result's `data`."
-  defmacro assert_data(result_expr, match_expr) do
-    quote do
-      result = unquote(result_expr)
-      assert unquote(match_expr) = Result.data(result)
+  @doc "Compares the result's `data` with the given term."
+  def assert_data(result, match) do
+    assert Result.data(result) == match
 
-      result
-    end
+    result
   end
 
-  @doc "Matches the given expression against the result's `meta`."
-  defmacro assert_meta(result_expr, match_expr) do
-    quote do
-      result = unquote(result_expr)
-      assert unquote(match_expr) == Result.meta(result)
+  @doc "Compares the result's `meta` with the given term."
+  def assert_meta(result, match) do
+    assert Result.meta(result) == match
 
-      result
-    end
+    result
   end
 
   @doc "Matches the given expression against the result's `dispatched` paths."
@@ -179,22 +173,16 @@ defmodule Weaver.IntegrationCase do
     end
   end
 
-  @doc "Matches the given expression against the result's `next`."
-  defmacro refute_next(result_expr) do
-    quote do
-      result = unquote(result_expr)
-      refute Result.next(result)
+  @doc "Expects the result's `next` to be nil."
+  def refute_next(result) do
+    refute Result.next(result)
 
-      result
-    end
+    result
   end
 
-  defmacro assert_done(result_expr) do
-    quote do
-      result = unquote(result_expr)
-      assert result == Result.empty()
+  def assert_done(result) do
+    assert result == Result.empty()
 
-      result
-    end
+    result
   end
 end
