@@ -16,8 +16,6 @@ defmodule WeaverTest do
   """
   use Weaver.IntegrationCase, async: false
 
-  alias Weaver.ExTwitter.Mock, as: Twitter
-
   @query """
   query {
     node(id: "TwitterUser:elixirdigest") {
@@ -45,24 +43,19 @@ defmodule WeaverTest do
   }
   """
 
-  def twitter_mock_for(user, tweets) do
-    fn [id: user_id, tweet_mode: :extended, count: count] ->
-      assert user_id == user.id
-      Enum.take(tweets, count)
-    end
-  end
-
-  def twitter_mock_for(user, tweets, max_id: max_id) do
-    fn [id: user_id, tweet_mode: :extended, count: count, max_id: ^max_id] ->
-      assert user_id == user.id
-      {_skipped, tweets} = Enum.split_while(tweets, &(&1.id > max_id))
-      Enum.take(tweets, count)
-    end
-  end
+  @invalid_query """
+  query {
+    node(id: "TwitterUser:elixirdigest") {
+      ... on TwitterUser {
+        publishedAt
+      }
+    }
+  }
+  """
 
   describe "prepare" do
     test "prepare" do
-      assert {:ok, _} = Weaver.prepare(@query, Weaver.Absinthe.Schema)
+      assert {:ok, _} = Weaver.prepare(@query, Schema)
     end
   end
 
@@ -195,10 +188,16 @@ defmodule WeaverTest do
   describe "backfill: first chunk has multiple records, next chunk has multiple records, some of which deleted, one remaining" do
   end
 
+  test "fails on invalid query" do
+    {:error, {:validation_failed, _}} =
+      @invalid_query
+      |> Weaver.prepare(Schema)
+  end
+
   describe "without markers" do
     setup do
-      user = build(ExTwitter.Model.User, screen_name: "elixirdigest")
-      favorites = build(ExTwitter.Model.Tweet, 10, fn i -> [id: 11 - i] end)
+      user = build(TwitterUser, screen_name: "elixirdigest")
+      favorites = build(Tweet, 10, fn i -> [id: 11 - i] end)
 
       {:ok, user: user, favorites: favorites}
     end
@@ -207,7 +206,7 @@ defmodule WeaverTest do
       [fav11, fav10, fav9, fav8 | _] = favorites
 
       @query
-      |> Weaver.prepare(Weaver.Absinthe.Schema)
+      |> Weaver.prepare(Schema)
 
       # user
       |> weave_initial(Twitter, :user, fn "elixirdigest" -> user end)
@@ -273,8 +272,8 @@ defmodule WeaverTest do
     setup :use_graph
 
     setup do
-      user = build(ExTwitter.Model.User, screen_name: "elixirdigest")
-      favorites = build(ExTwitter.Model.Tweet, 20, fn i -> [id: 21 - i] end)
+      user = build(TwitterUser, screen_name: "elixirdigest")
+      favorites = build(Tweet, 20, fn i -> [id: 21 - i] end)
 
       meta = [
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
@@ -301,7 +300,7 @@ defmodule WeaverTest do
       [fav21, _, _, _, _, _, fav15, fav14, fav13, _, fav11 | _] = favorites
 
       @query
-      |> Weaver.prepare(Weaver.Absinthe.Schema, cache: Weaver.Graph)
+      |> Weaver.prepare(Schema, cache: Weaver.Graph)
       |> weave_initial(Twitter, :user, fn "elixirdigest" -> user end)
       |> assert_has_data([
         {%Ref{id: "TwitterUser:elixirdigest"}, "screenName", "elixirdigest"},
@@ -423,8 +422,8 @@ defmodule WeaverTest do
     setup :use_graph
 
     setup do
-      user = build(ExTwitter.Model.User, screen_name: "elixirdigest")
-      favorites = build(ExTwitter.Model.Tweet, 20, fn i -> [id: 21 - i] end)
+      user = build(TwitterUser, screen_name: "elixirdigest")
+      favorites = build(Tweet, 20, fn i -> [id: 21 - i] end)
 
       meta = [
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
@@ -444,7 +443,7 @@ defmodule WeaverTest do
       [fav21 | _] = favorites
 
       @query
-      |> Weaver.prepare(Weaver.Absinthe.Schema, cache: Weaver.Graph)
+      |> Weaver.prepare(Schema, cache: Weaver.Graph)
       |> weave_initial(Twitter, :user, fn "elixirdigest" -> user end)
 
       # favorites initial
@@ -474,8 +473,8 @@ defmodule WeaverTest do
     setup :use_graph
 
     setup do
-      user = build(ExTwitter.Model.User, screen_name: "elixirdigest")
-      favorites = build(ExTwitter.Model.Tweet, 20, fn i -> [id: 21 - i] end)
+      user = build(TwitterUser, screen_name: "elixirdigest")
+      favorites = build(Tweet, 20, fn i -> [id: 21 - i] end)
 
       meta = [
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
@@ -502,7 +501,7 @@ defmodule WeaverTest do
       [fav21, fav20 | _] = favorites
 
       @query
-      |> Weaver.prepare(Weaver.Absinthe.Schema, cache: Weaver.Graph)
+      |> Weaver.prepare(Schema, cache: Weaver.Graph)
       |> weave_initial(Twitter, :user, fn "elixirdigest" -> user end)
 
       # favorites initial
@@ -539,7 +538,7 @@ defmodule WeaverTest do
       favorites = Enum.take(favorites, 1)
 
       @query
-      |> Weaver.prepare(Weaver.Absinthe.Schema, cache: Weaver.Graph)
+      |> Weaver.prepare(Schema, cache: Weaver.Graph)
       |> weave_initial(Twitter, :user, fn "elixirdigest" -> user end)
 
       # favorites initial
@@ -592,7 +591,7 @@ defmodule WeaverTest do
       favorites = Enum.take(favorites, 7)
 
       @query
-      |> Weaver.prepare(Weaver.Absinthe.Schema, cache: Weaver.Graph)
+      |> Weaver.prepare(Schema, cache: Weaver.Graph)
       |> weave_initial(Twitter, :user, fn "elixirdigest" -> user end)
 
       # favorites initial
@@ -631,7 +630,7 @@ defmodule WeaverTest do
 
     test "deletes all markers with all tweets deleted", %{user: user} do
       @query
-      |> Weaver.prepare(Weaver.Absinthe.Schema, cache: Weaver.Graph)
+      |> Weaver.prepare(Schema, cache: Weaver.Graph)
       |> weave_initial(Twitter, :user, fn "elixirdigest" -> user end)
 
       # favorites initial

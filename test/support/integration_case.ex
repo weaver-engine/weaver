@@ -18,10 +18,33 @@ defmodule Weaver.IntegrationCase do
     quote location: :keep do
       alias Weaver.{Marker, Ref}
 
+      # Default test schema
+      alias Weaver.Absinthe.Schema
+      alias Weaver.ExTwitter.Mock, as: Twitter
+      alias ExTwitter.Model.User, as: TwitterUser
+      alias ExTwitter.Model.Tweet
+
       import Weaver.IntegrationCase
       import Test.Support.Factory
 
       require Weaver.IntegrationCase
+    end
+  end
+
+  # Mock helpers
+
+  def twitter_mock_for(user, tweets) do
+    fn [id: user_id, tweet_mode: :extended, count: count] ->
+      assert user_id == user.id
+      Enum.take(tweets, count)
+    end
+  end
+
+  def twitter_mock_for(user, tweets, max_id: max_id) do
+    fn [id: user_id, tweet_mode: :extended, count: count, max_id: ^max_id] ->
+      assert user_id == user.id
+      {_skipped, tweets} = Enum.split_while(tweets, &(&1.id > max_id))
+      Enum.take(tweets, count)
     end
   end
 

@@ -1,8 +1,5 @@
-defmodule Weaver.Absinthe.AbsintheTest do
+defmodule Weaver.NestedTimelinesTest do
   use Weaver.IntegrationCase, async: false
-
-  alias Weaver.ExTwitter.Mock, as: Twitter
-  alias Weaver.Absinthe.Schema
 
   @query """
   query {
@@ -23,34 +20,9 @@ defmodule Weaver.Absinthe.AbsintheTest do
   }
   """
 
-  @invalid_query """
-  query {
-    node(id: "TwitterUser:elixirdigest") {
-      ... on TwitterUser {
-        publishedAt
-      }
-    }
-  }
-  """
-
-  def twitter_mock_for(user, tweets) do
-    fn [id: user_id, tweet_mode: :extended, count: count] ->
-      assert user_id == user.id
-      Enum.take(tweets, count)
-    end
-  end
-
-  def twitter_mock_for(user, tweets, max_id: max_id) do
-    fn [id: user_id, tweet_mode: :extended, count: count, max_id: ^max_id] ->
-      assert user_id == user.id
-      {_skipped, tweets} = Enum.split_while(tweets, &(&1.id > max_id))
-      Enum.take(tweets, count)
-    end
-  end
-
   setup do
-    user = build(ExTwitter.Model.User, screen_name: "elixirdigest")
-    favorites = build(ExTwitter.Model.Tweet, 4, fn i -> [id: 11 - i] end)
+    user = build(TwitterUser, screen_name: "elixirdigest")
+    favorites = build(Tweet, 4, fn i -> [id: 11 - i] end)
 
     {:ok, user: user, favorites: favorites}
   end
@@ -115,8 +87,8 @@ defmodule Weaver.Absinthe.AbsintheTest do
     |> refute_next()
 
     # TWEETS
-    tweet1 = build(ExTwitter.Model.Tweet, id: 35)
-    tweet2 = build(ExTwitter.Model.Tweet, id: 21)
+    tweet1 = build(Tweet, id: 35)
+    tweet2 = build(Tweet, id: 21)
 
     retweets_step =
       root_step
@@ -139,7 +111,7 @@ defmodule Weaver.Absinthe.AbsintheTest do
       |> assert_next_state(%{prev_chunk_end: %Marker{val: 21}})
 
     # RETWEETS 1a
-    retweet1 = build(ExTwitter.Model.Tweet)
+    retweet1 = build(Tweet)
     tweet1_id = tweet1.id
 
     retweets_step
@@ -168,7 +140,7 @@ defmodule Weaver.Absinthe.AbsintheTest do
     |> refute_next()
 
     # RETWEETS 2
-    retweet2 = build(ExTwitter.Model.Tweet)
+    retweet2 = build(Tweet)
     tweet2_id = tweet2.id
 
     retweets_step
@@ -195,11 +167,5 @@ defmodule Weaver.Absinthe.AbsintheTest do
     ])
     |> assert_dispatched_paths([])
     |> refute_next()
-  end
-
-  test "fails on invalid query" do
-    {:error, {:validation_failed, _}} =
-      @invalid_query
-      |> Weaver.prepare(Schema)
   end
 end
