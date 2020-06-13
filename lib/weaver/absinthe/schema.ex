@@ -7,6 +7,14 @@ defmodule Weaver.Absinthe.Schema do
   alias ExTwitter.Model.{Tweet, User}
   alias Weaver.Resolvers
 
+  defimpl Weaver.Node, for: Tweet do
+    def id_for(tweet), do: "Tweet:#{tweet.id_str}"
+  end
+
+  defimpl Weaver.Node, for: User do
+    def id_for(user), do: "TwitterUser:#{user.screen_name}"
+  end
+
   interface :node do
     field(:id, non_null(:id))
   end
@@ -87,6 +95,6 @@ defmodule Weaver.Absinthe.Schema do
   end
 
   defp weaver_id(obj, _, _) do
-    {:ok, Resolvers.id_for(obj)}
+    {:ok, Weaver.Node.id_for(obj)}
   end
 end

@@ -92,7 +92,7 @@ defmodule Weaver.Step do
 
   defp before_marker?(obj, marker) do
     Resolvers.marker_val(obj) > marker.val &&
-      Resolvers.id_for(obj) != marker.ref.id
+      Weaver.Node.id_for(obj) != marker.ref.id
   end
 
   def load_markers(step = %{next_chunk_start: val}, _opts, _cache, _parent_ref, _field)

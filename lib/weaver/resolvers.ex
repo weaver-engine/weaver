@@ -18,9 +18,6 @@ defmodule Weaver.Resolvers do
     @twitter_client.user(id)
   end
 
-  def id_for(obj = %User{}), do: "TwitterUser:#{obj.screen_name}"
-  def id_for(obj = %Tweet{}), do: "Tweet:#{obj.id_str}"
-
   def end_marker(objs) when is_list(objs) do
     objs
     |> Enum.min_by(& &1.id)
@@ -167,14 +164,13 @@ defmodule Weaver.Resolvers do
           )
       end
 
-    case tweets do
+    case Enum.filter(tweets, & &1.retweeted_status) do
       [] ->
         {:done, []}
 
       tweets ->
         tweets =
           tweets
-          |> Enum.filter(& &1.retweeted_status)
           |> Enum.take(@api_take)
 
         {:continue, tweets, end_marker(tweets)}
