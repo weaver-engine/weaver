@@ -14,7 +14,7 @@ defmodule Weaver.Loom.Event do
 
   @type t() :: %__MODULE__{
           callback: (Weaver.Step.Result.t(), map(), map() -> callback_return()),
-          step: Weaver.Step.t(),
+          step: Absinthe.Blueprint.t(),
           dispatch_assigns: map(),
           next_assigns: map()
         }
@@ -31,7 +31,7 @@ defmodule Weaver.Loom.Event do
           | {:error, any()}
   def process(event) do
     event.step
-    |> Weaver.Step.process()
+    |> Weaver.weave()
     |> safe_callback(event)
     |> case do
       {:ok, result, dispatch_assigns, next_assigns} ->
@@ -68,7 +68,7 @@ defmodule Weaver.Loom.Event do
     end
   end
 
-  def safe_callback(result, %{
+  def safe_callback({:ok, result}, %{
         callback: callback,
         dispatch_assigns: dispatch_assigns,
         next_assigns: next_assigns

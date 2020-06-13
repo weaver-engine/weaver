@@ -36,7 +36,8 @@ defmodule Weaver.LoomTest do
     user = build(TwitterUser, screen_name: "elixirdigest")
     expect(Twitter, :user, fn "elixirdigest" -> user end)
 
-    Weaver.Loom.weave(@query, callback)
+    Weaver.Loom.prepare(@query, Weaver.Absinthe.Schema, callback)
+    |> Weaver.Loom.weave()
 
     assert_receive {:callback, _result, _dispatch_assigns, _next_assigns}, 10_000
 
@@ -56,7 +57,7 @@ defmodule Weaver.LoomTest do
       user = build(TwitterUser, screen_name: "elixirdigest")
       expect(Twitter, :user, fn "elixirdigest" -> user end)
 
-      event = Weaver.Loom.prepare(@query, callback)
+      event = Weaver.Loom.prepare(@query, Weaver.Absinthe.Schema, callback)
       Weaver.Loom.Consumer.handle_events([event], self(), %{name: :weaver_consumer_x})
 
       assert_receive {:callback, _result, _dispatch_assigns, _next_assigns}, 10_000

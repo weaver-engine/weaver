@@ -1,10 +1,12 @@
 defmodule Weaver do
   @moduledoc """
   Root module and main API of Weaver.
-  """
 
-  alias Weaver.{GraphQL, Step}
-  alias Weaver.GraphQL.Resolver
+  Entry point for weaving queries based on `Absinthe.Pipeline`.
+
+  Use `run/3` for initial execution, returning a `Weaver.Step.Result`.
+  Subsequent steps (the result's `dispatched` and `next` steps) can be executed via `resolve/3`.
+  """
 
   defmodule Ref do
     @moduledoc """
@@ -53,73 +55,73 @@ defmodule Weaver do
     end
   end
 
-  def prepare(query, opts \\ []) do
-    {ast, fun_env} = parse_query(query)
+  alias Absinthe.Pipeline
+  alias Weaver.Absinthe.Middleware.Continue
 
-    %Step{
-      ast: ast,
-      fun_env: fun_env,
-      cache: Keyword.get(opts, :cache),
-      operation: Keyword.get(opts, :operation, ""),
-      variables: Keyword.get(opts, :variables, %{})
-    }
-  end
+  @result_phase Weaver.Absinthe.Phase.Document.Result
+  @resolution_phase Absinthe.Phase.Document.Execution.Resolution
 
-  def weave(query, opts \\ [])
+  def prepare(document, schema, options \\ []) do
+    context =
+      Keyword.get(options, :context, %{})
+      |> Map.put_new(:cache, Keyword.get(options, :cache, nil))
+      |> Map.put_new(:refresh, Keyword.get(options, :refresh, true))
+      |> Map.put_new(:backfill, Keyword.get(options, :backfill, true))
 
-  def weave(query, opts) when is_binary(query) do
-    prepare(query, opts)
-    |> weave()
-  end
+    options = Keyword.put(options, :context, context)
 
-  def weave(step = %Step{}, _opts) do
-    Step.process(step)
-  end
+    pipeline =
+      schema
+      |> pipeline(options)
+      |> Pipeline.without(@resolution_phase)
 
-  def parse_query(query) do
-    with {:ok, ast} <- :graphql.parse(query),
-         {:ok, %{ast: ast, fun_env: fun_env}} <- :graphql.type_check(ast),
-         :ok <- :graphql.validate(ast) do
-      {ast, fun_env}
+    case Absinthe.Pipeline.run(document, pipeline) do
+      {:ok, %{result: {:validation_failed, errors}}, _phases} ->
+        {:error, {:validation_failed, errors}}
+
+      {:ok, blueprint, _phases} ->
+        {:ok, blueprint}
+
+      {:error, msg, _phases} ->
+        {:error, msg}
     end
   end
 
-  def load_schema() do
-    with :ok <- :graphql.load_schema(mapping(), schema()),
-         :ok <- :graphql.insert_schema_definition(root_schema()),
-         :ok <- :graphql.validate_schema() do
-      :ok
+  def pipeline(schema, options) do
+    options = Keyword.put_new(options, :result_phase, @result_phase)
+
+    Pipeline.for_document(schema, options)
+    |> Pipeline.replace(Absinthe.Phase.Document.Result, @result_phase)
+  end
+
+  def weave(blueprint, options \\ []) do
+    pipeline =
+      pipeline(blueprint.schema, options)
+      |> Pipeline.from(@resolution_phase)
+
+    case Absinthe.Pipeline.run(blueprint, pipeline) do
+      {:ok, %{result: result}, _phases} ->
+        result =
+          case Weaver.Step.Result.next(result) do
+            nil ->
+              result
+
+            next_blueprint ->
+              continuation = next_blueprint.execution.acc[Continue]
+
+              Weaver.Step.Result.set_next(
+                result,
+                update_in(
+                  blueprint.execution.acc,
+                  &Map.put(&1, Continue, continuation)
+                )
+              )
+          end
+
+        {:ok, result}
+
+      {:error, msg, _phases} ->
+        {:error, msg}
     end
-  end
-
-  defp schema() do
-    [File.cwd!(), "priv", "weaver", "schema.graphql"]
-    |> Path.join()
-    |> File.read!()
-  end
-
-  defp root_schema() do
-    {:root,
-     %{
-       :query => "Query",
-       :mutation => "Mutation",
-       :interfaces => ["Node"]
-     }}
-  end
-
-  defp mapping() do
-    %{
-      scalars: %{default: GraphQL.Scalar.Default},
-      interfaces: %{default: GraphQL.Interface.Default},
-      unions: %{default: GraphQL.Union.Default},
-      enums: %{default: GraphQL.Enum.Default},
-      objects: %{
-        Query: Resolver.QueryRoot,
-        Mutation: Resolver.Mutation,
-        TwitterUser: Weaver.Twitter.User,
-        Tweet: Weaver.Twitter.Tweet,
-        default: Resolver.Default
-      }
-    }
   end
 end

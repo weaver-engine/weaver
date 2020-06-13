@@ -4,14 +4,14 @@ defmodule Weaver.Step.Result do
   returned as the result of `Weaver.Step.process/1`.
   """
 
-  alias Weaver.{Ref, Step}
+  alias Weaver.Ref
 
   @type t() :: {
           list(tuple()),
           list(tuple()),
           list(tuple()),
-          list(Step.t()),
-          Step.t() | nil
+          list(Absinthe.Blueprint.t()),
+          Absinthe.Blueprint.t() | nil
         }
 
   def empty() do
@@ -23,6 +23,10 @@ defmodule Weaver.Step.Result do
   def errors({_, _, errors, _, _}), do: errors
   def dispatched({_, _, _, dispatched, _}), do: dispatched
   def next({_, _, _, _, next}), do: next
+
+  def add_data({data, meta, errors, dispatched, next}, tuples) when is_list(tuples) do
+    {tuples ++ data, meta, errors, dispatched, next}
+  end
 
   def add_data({data, meta, errors, dispatched, next}, tuple) do
     {[tuple | data], meta, errors, dispatched, next}
@@ -50,5 +54,12 @@ defmodule Weaver.Step.Result do
 
   def set_next({data, meta, errors, dispatched, _next}, step) do
     {data, meta, errors, dispatched, step}
+  end
+
+  def merge(result1, result2) do
+    result1
+    |> add_data(data(result2))
+    |> add_meta(meta(result2))
+    |> add_errors(errors(result2))
   end
 end

@@ -18,10 +18,33 @@ defmodule Weaver.IntegrationCase do
     quote location: :keep do
       alias Weaver.{Marker, Ref}
 
+      # Default test schema
+      alias Weaver.Absinthe.Schema
+      alias Weaver.ExTwitter.Mock, as: Twitter
+      alias ExTwitter.Model.User, as: TwitterUser
+      alias ExTwitter.Model.Tweet
+
       import Weaver.IntegrationCase
       import Test.Support.Factory
 
       require Weaver.IntegrationCase
+    end
+  end
+
+  # Mock helpers
+
+  def twitter_mock_for(user, tweets) do
+    fn [id: user_id, tweet_mode: :extended, count: count] ->
+      assert user_id == user.id
+      Enum.take(tweets, count)
+    end
+  end
+
+  def twitter_mock_for(user, tweets, max_id: max_id) do
+    fn [id: user_id, tweet_mode: :extended, count: count, max_id: ^max_id] ->
+      assert user_id == user.id
+      {_skipped, tweets} = Enum.split_while(tweets, &(&1.id > max_id))
+      Enum.take(tweets, count)
     end
   end
 
@@ -31,7 +54,7 @@ defmodule Weaver.IntegrationCase do
     Weaver.Graph.reset!()
   end
 
-  def weave_initial(step = %Weaver.Step{}, mock, fn_name, mock_fun) do
+  def weave_initial({:ok, step}, mock, fn_name, mock_fun) do
     Mox.expect(mock, fn_name, mock_fun)
 
     weave_step(step)
@@ -58,12 +81,12 @@ defmodule Weaver.IntegrationCase do
     |> weave_step()
   end
 
-  defp weave_step(step = %Weaver.Step{}) do
-    result = Weaver.weave(step)
+  defp weave_step(step) do
+    {:ok, result} = Weaver.weave(step)
 
     Mox.verify!()
 
-    case step do
+    case step.execution.context do
       %{cache: {mod, opts}} when mod != nil ->
         assert mod.store!(Result.data(result), Result.meta(result), opts)
 
@@ -107,62 +130,82 @@ defmodule Weaver.IntegrationCase do
     end
   end
 
-  @doc "Matches the given expression against the result's `data`."
-  defmacro assert_data(result_expr, match_expr) do
+  @doc "Compares the result's `data` with the given term."
+  def assert_data(result, match) do
+    assert Result.data(result) == match
+
+    result
+  end
+
+  @doc "Compares the result's `meta` with the given term."
+  def assert_meta(result, match) do
+    assert Result.meta(result) == match
+
+    result
+  end
+
+  @doc "Matches the given expression against the result's `dispatched` paths."
+  defmacro assert_dispatched_paths(result_expr, match_expr) do
     quote do
       result = unquote(result_expr)
-      assert unquote(match_expr) = Result.data(result)
+
+      paths =
+        result
+        |> Result.dispatched()
+        |> Enum.map(fn
+          %{execution: %{acc: %{resolution: paths}}} -> paths
+        end)
+
+      assert unquote(match_expr) = paths
 
       result
     end
   end
 
-  @doc "Matches the given expression against the result's `meta`."
-  defmacro assert_meta(result_expr, match_expr) do
+  @doc "Matches the given expression against the result's `next` path."
+  defmacro assert_next_path(result_expr, match_expr) do
     quote do
       result = unquote(result_expr)
-      assert unquote(match_expr) == Result.meta(result)
+
+      assert %{
+               execution: %{
+                 acc: %{
+                   resolution: unquote(match_expr)
+                 }
+               }
+             } = Result.next(result)
 
       result
     end
   end
 
-  @doc "Matches the given expression against the result's `dispatched`."
-  defmacro assert_dispatched(result_expr, match_expr) do
+  @doc "Matches the given expression against the result's `next` Weaver state."
+  defmacro assert_next_state(result_expr, match_expr) do
     quote do
       result = unquote(result_expr)
-      assert unquote(match_expr) = Result.dispatched(result)
+
+      assert %{
+               execution: %{
+                 acc: %{
+                   Weaver.Absinthe.Middleware.Continue => unquote(match_expr)
+                 }
+               }
+             } = Result.next(result)
 
       result
     end
   end
 
-  @doc "Matches the given expression against the result's `next`."
-  defmacro assert_next(result_expr, match_expr) do
-    quote do
-      result = unquote(result_expr)
-      assert unquote(match_expr) = Result.next(result)
+  @doc "Expects the result's `next` to be nil."
+  def refute_next(result) do
+    refute Result.next(result)
 
-      result
-    end
+    result
   end
 
-  @doc "Matches the given expression against the result's `next`."
-  defmacro refute_next(result_expr) do
-    quote do
-      result = unquote(result_expr)
-      refute Result.next(result)
+  def assert_done(result) do
+    assert result == Result.empty()
 
-      result
-    end
-  end
-
-  defmacro assert_done(result_expr) do
-    quote do
-      result = unquote(result_expr)
-      assert result == Result.empty()
-
-      result
-    end
+    result
   end
 end

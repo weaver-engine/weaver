@@ -16,8 +16,6 @@ defmodule WeaverTest do
   """
   use Weaver.IntegrationCase, async: false
 
-  alias Weaver.ExTwitter.Mock, as: Twitter
-
   @query """
   query {
     node(id: "TwitterUser:elixirdigest") {
@@ -45,24 +43,19 @@ defmodule WeaverTest do
   }
   """
 
-  def twitter_mock_for(user, tweets) do
-    fn [id: user_id, tweet_mode: :extended, count: count] ->
-      assert user_id == user.id
-      Enum.take(tweets, count)
-    end
-  end
-
-  def twitter_mock_for(user, tweets, max_id: max_id) do
-    fn [id: user_id, tweet_mode: :extended, count: count, max_id: ^max_id] ->
-      assert user_id == user.id
-      {_skipped, tweets} = Enum.split_while(tweets, &(&1.id > max_id))
-      Enum.take(tweets, count)
-    end
-  end
+  @invalid_query """
+  query {
+    node(id: "TwitterUser:elixirdigest") {
+      ... on TwitterUser {
+        publishedAt
+      }
+    }
+  }
+  """
 
   describe "prepare" do
     test "prepare" do
-      assert %Weaver.Step{} = Weaver.prepare(@query)
+      assert {:ok, _} = Weaver.prepare(@query, Schema)
     end
   end
 
@@ -195,10 +188,16 @@ defmodule WeaverTest do
   describe "backfill: first chunk has multiple records, next chunk has multiple records, some of which deleted, one remaining" do
   end
 
+  test "fails on invalid query" do
+    {:error, {:validation_failed, _}} =
+      @invalid_query
+      |> Weaver.prepare(Schema)
+  end
+
   describe "without markers" do
     setup do
-      user = build(ExTwitter.Model.User, screen_name: "elixirdigest")
-      favorites = build(ExTwitter.Model.Tweet, 10, fn i -> [id: 11 - i] end)
+      user = build(TwitterUser, screen_name: "elixirdigest")
+      favorites = build(Tweet, 10, fn i -> [id: 11 - i] end)
 
       {:ok, user: user, favorites: favorites}
     end
@@ -207,7 +206,7 @@ defmodule WeaverTest do
       [fav11, fav10, fav9, fav8 | _] = favorites
 
       @query
-      |> Weaver.prepare()
+      |> Weaver.prepare(Schema)
 
       # user
       |> weave_initial(Twitter, :user, fn "elixirdigest" -> user end)
@@ -216,13 +215,8 @@ defmodule WeaverTest do
         {%Ref{id: "TwitterUser:elixirdigest"}, "favoritesCount", user.favourites_count}
       ])
       |> assert_meta([])
-      |> assert_dispatched([
-        %{
-          ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
-          prev_chunk_end: nil,
-          next_chunk_start: :not_loaded,
-          data: ^user
-        }
+      |> assert_dispatched_paths([
+        [%{name: "favorites"} | _]
       ])
       |> refute_next()
 
@@ -240,14 +234,14 @@ defmodule WeaverTest do
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
          Marker.chunk_end("Tweet:10", 10)}
       ])
-      |> assert_next(%{
-        ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
+      |> assert_next_path([%{name: "favorites"} | _])
+      |> assert_next_state(%{
         prev_chunk_end: %Marker{type: :chunk_end, ref: %Ref{id: "Tweet:10"}, val: 10},
         next_chunk_start: nil
       })
-      |> assert_dispatched([
-        %{data: ^fav10, ast: {:dispatched, {:field, {:name, _, "retweets"}, _, _, _, _, _}}},
-        %{data: ^fav11, ast: {:dispatched, {:field, {:name, _, "retweets"}, _, _, _, _, _}}}
+      |> assert_dispatched_paths([
+        [%{name: "retweets"} | _],
+        [%{name: "retweets"} | _]
       ])
 
       # favorites pt. 2
@@ -263,13 +257,13 @@ defmodule WeaverTest do
          Marker.chunk_end("Tweet:10", 10)},
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites", Marker.chunk_end("Tweet:8", 8)}
       ])
-      |> assert_next(%{
-        ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
+      |> assert_next_path([%{name: "favorites"} | _])
+      |> assert_next_state(%{
         prev_chunk_end: %Marker{type: :chunk_end, ref: %Ref{id: "Tweet:8"}, val: 8}
       })
-      |> assert_dispatched([
-        %{data: ^fav8, ast: {:dispatched, {:field, {:name, _, "retweets"}, _, _, _, _, _}}},
-        %{data: ^fav9, ast: {:dispatched, {:field, {:name, _, "retweets"}, _, _, _, _, _}}}
+      |> assert_dispatched_paths([
+        [%{name: "retweets"} | _],
+        [%{name: "retweets"} | _]
       ])
     end
   end
@@ -278,8 +272,8 @@ defmodule WeaverTest do
     setup :use_graph
 
     setup do
-      user = build(ExTwitter.Model.User, screen_name: "elixirdigest")
-      favorites = build(ExTwitter.Model.Tweet, 20, fn i -> [id: 21 - i] end)
+      user = build(TwitterUser, screen_name: "elixirdigest")
+      favorites = build(Tweet, 20, fn i -> [id: 21 - i] end)
 
       meta = [
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
@@ -306,20 +300,15 @@ defmodule WeaverTest do
       [fav21, _, _, _, _, _, fav15, fav14, fav13, _, fav11 | _] = favorites
 
       @query
-      |> Weaver.prepare(cache: Weaver.Graph)
+      |> Weaver.prepare(Schema, cache: Weaver.Graph)
       |> weave_initial(Twitter, :user, fn "elixirdigest" -> user end)
       |> assert_has_data([
         {%Ref{id: "TwitterUser:elixirdigest"}, "screenName", "elixirdigest"},
         {%Ref{id: "TwitterUser:elixirdigest"}, "favoritesCount", user.favourites_count}
       ])
       |> assert_meta([])
-      |> assert_dispatched([
-        %{
-          ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
-          prev_chunk_end: nil,
-          next_chunk_start: :not_loaded,
-          data: ^user
-        }
+      |> assert_dispatched_paths([
+        [%{name: "favorites"} | _]
       ])
 
       # favorites initial
@@ -334,11 +323,11 @@ defmodule WeaverTest do
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
          Marker.chunk_start("Tweet:20", 20)}
       ])
-      |> assert_dispatched([
-        %{data: ^fav21, ast: {:dispatched, {:field, {:name, _, "retweets"}, _, _, _, _, _}}}
+      |> assert_dispatched_paths([
+        [%{name: "retweets"} | _]
       ])
-      |> assert_next(%{
-        ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
+      |> assert_next_path([%{name: "favorites"} | _])
+      |> assert_next_state(%{
         prev_chunk_end: :not_loaded,
         next_chunk_start: :not_loaded
       })
@@ -357,13 +346,13 @@ defmodule WeaverTest do
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
          Marker.chunk_end("Tweet:14", 14)}
       ])
-      |> assert_next(%{
-        ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
+      |> assert_next_path([%{name: "favorites"} | _])
+      |> assert_next_state(%{
         prev_chunk_end: %Marker{type: :chunk_end, ref: %Ref{id: "Tweet:14"}, val: 14}
       })
-      |> assert_dispatched([
-        %{data: ^fav14, ast: {:dispatched, {:field, {:name, _, "retweets"}, _, _, _, _, _}}},
-        %{data: ^fav15, ast: {:dispatched, {:field, {:name, _, "retweets"}, _, _, _, _, _}}}
+      |> assert_dispatched_paths([
+        [%{name: "retweets"} | _],
+        [%{name: "retweets"} | _]
       ])
 
       # favorites pt. 3 - gap closed
@@ -378,13 +367,13 @@ defmodule WeaverTest do
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
          Marker.chunk_start("Tweet:12", 12)}
       ])
-      |> assert_next(%{
-        ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
+      |> assert_next_path([%{name: "favorites"} | _])
+      |> assert_next_state(%{
         prev_chunk_end: :not_loaded,
         next_chunk_start: :not_loaded
       })
-      |> assert_dispatched([
-        %{data: ^fav13, ast: {:dispatched, {:field, {:name, _, "retweets"}, _, _, _, _, _}}}
+      |> assert_dispatched_paths([
+        [%{name: "retweets"} | _]
       ])
 
       # favorites pt. 4 - gap closed
@@ -399,26 +388,26 @@ defmodule WeaverTest do
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
          Marker.chunk_start("Tweet:10", 10)}
       ])
-      |> assert_next(%{
-        ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
+      |> assert_next_path([%{name: "favorites"} | _])
+      |> assert_next_state(%{
         prev_chunk_end: :not_loaded,
         next_chunk_start: :not_loaded
       })
-      |> assert_dispatched([
-        %{data: ^fav11, ast: {:dispatched, {:field, {:name, _, "retweets"}, _, _, _, _, _}}}
+      |> assert_dispatched_paths([
+        [%{name: "retweets"} | _]
       ])
 
       # favorites pt. 5 - gap closed
       |> weave_next(Twitter, :favorites, twitter_mock_for(user, favorites, max_id: 7))
       |> assert_data([])
-      |> assert_dispatched([])
+      |> assert_dispatched_paths([])
       |> assert_meta([
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites", Marker.chunk_end("Tweet:8", 8)},
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
          Marker.chunk_start("Tweet:7", 7)}
       ])
-      |> assert_next(%{
-        ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
+      |> assert_next_path([%{name: "favorites"} | _])
+      |> assert_next_state(%{
         prev_chunk_end: :not_loaded,
         next_chunk_start: :not_loaded
       })
@@ -433,8 +422,8 @@ defmodule WeaverTest do
     setup :use_graph
 
     setup do
-      user = build(ExTwitter.Model.User, screen_name: "elixirdigest")
-      favorites = build(ExTwitter.Model.Tweet, 20, fn i -> [id: 21 - i] end)
+      user = build(TwitterUser, screen_name: "elixirdigest")
+      favorites = build(Tweet, 20, fn i -> [id: 21 - i] end)
 
       meta = [
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
@@ -454,7 +443,7 @@ defmodule WeaverTest do
       [fav21 | _] = favorites
 
       @query
-      |> Weaver.prepare(cache: Weaver.Graph)
+      |> Weaver.prepare(Schema, cache: Weaver.Graph)
       |> weave_initial(Twitter, :user, fn "elixirdigest" -> user end)
 
       # favorites initial
@@ -469,11 +458,11 @@ defmodule WeaverTest do
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
          Marker.chunk_start("Tweet:20", 20)}
       ])
-      |> assert_dispatched([
-        %{data: ^fav21, ast: {:dispatched, {:field, {:name, _, "retweets"}, _, _, _, _, _}}}
+      |> assert_dispatched_paths([
+        [%{name: "retweets"} | _]
       ])
-      |> assert_next(%{
-        ast: {:dispatched, {:field, {:name, _, "favorites"}, _, _, _, _, _}},
+      |> assert_next_path([%{name: "favorites"} | _])
+      |> assert_next_state(%{
         prev_chunk_end: :not_loaded,
         next_chunk_start: :not_loaded
       })
@@ -484,8 +473,8 @@ defmodule WeaverTest do
     setup :use_graph
 
     setup do
-      user = build(ExTwitter.Model.User, screen_name: "elixirdigest")
-      favorites = build(ExTwitter.Model.Tweet, 20, fn i -> [id: 21 - i] end)
+      user = build(TwitterUser, screen_name: "elixirdigest")
+      favorites = build(Tweet, 20, fn i -> [id: 21 - i] end)
 
       meta = [
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
@@ -512,7 +501,7 @@ defmodule WeaverTest do
       [fav21, fav20 | _] = favorites
 
       @query
-      |> Weaver.prepare(cache: Weaver.Graph)
+      |> Weaver.prepare(Schema, cache: Weaver.Graph)
       |> weave_initial(Twitter, :user, fn "elixirdigest" -> user end)
 
       # favorites initial
@@ -549,7 +538,7 @@ defmodule WeaverTest do
       favorites = Enum.take(favorites, 1)
 
       @query
-      |> Weaver.prepare(cache: Weaver.Graph)
+      |> Weaver.prepare(Schema, cache: Weaver.Graph)
       |> weave_initial(Twitter, :user, fn "elixirdigest" -> user end)
 
       # favorites initial
@@ -602,7 +591,7 @@ defmodule WeaverTest do
       favorites = Enum.take(favorites, 7)
 
       @query
-      |> Weaver.prepare(cache: Weaver.Graph)
+      |> Weaver.prepare(Schema, cache: Weaver.Graph)
       |> weave_initial(Twitter, :user, fn "elixirdigest" -> user end)
 
       # favorites initial
@@ -641,7 +630,7 @@ defmodule WeaverTest do
 
     test "deletes all markers with all tweets deleted", %{user: user} do
       @query
-      |> Weaver.prepare(cache: Weaver.Graph)
+      |> Weaver.prepare(Schema, cache: Weaver.Graph)
       |> weave_initial(Twitter, :user, fn "elixirdigest" -> user end)
 
       # favorites initial
