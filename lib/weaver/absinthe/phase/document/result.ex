@@ -50,17 +50,17 @@ defmodule Weaver.Absinthe.Phase.Document.Result do
     end
   end
 
-  defp data([], parent, %{errors: [_ | _] = field_errors, emitter: emitter}, result) do
+  defp data([], parent_ref, %{errors: [_ | _] = field_errors, emitter: emitter}, result) do
     Result.add_errors(
       result,
-      Enum.map(field_errors, &{Ref.from(parent), field_name(emitter), &1})
+      Enum.map(field_errors, &{parent_ref, field_name(emitter), &1})
     )
   end
 
   # Leaf
-  defp data(path, parent, %Leaf{value: nil, emitter: emitter} = field, result) do
+  defp data(path, parent_ref, %Leaf{value: nil, emitter: emitter} = field, result) do
     if on_path?(field, path) do
-      Result.add_data(result, {Ref.from(parent), field_name(emitter), nil})
+      Result.add_data(result, {parent_ref, field_name(emitter), nil})
     else
       result
     end
@@ -70,7 +70,7 @@ defmodule Weaver.Absinthe.Phase.Document.Result do
     result
   end
 
-  defp data(path, parent, %{value: value, emitter: emitter} = field, result) do
+  defp data(path, parent_ref, %{value: value, emitter: emitter} = field, result) do
     if on_path?(field, path) do
       value =
         case Type.unwrap(emitter.schema_node.type) do
@@ -81,7 +81,7 @@ defmodule Weaver.Absinthe.Phase.Document.Result do
             Type.Enum.serialize(schema_node, value)
         end
 
-      Result.add_data(result, {Ref.from(parent), field_name(emitter), value})
+      Result.add_data(result, {parent_ref, field_name(emitter), value})
     else
       result
     end
@@ -93,41 +93,42 @@ defmodule Weaver.Absinthe.Phase.Document.Result do
   end
 
   defp data(path, nil, %{fields: fields, root_value: obj} = field, result) do
-    field_data(next_path(field, path), obj, fields, result)
+    field_data(next_path(field, path), Ref.from(obj), fields, result)
   end
 
-  defp data(path, parent, %{fields: fields, emitter: emitter, root_value: obj} = field, result) do
+  defp data(
+         path,
+         parent_ref,
+         %{fields: fields, emitter: emitter, root_value: obj} = field,
+         result
+       ) do
     next_path = next_path(field, path)
 
     if next_path do
       result =
         if next_path == [] do
-          Result.add_relation_data(result, {Ref.from(parent), field_name(emitter), [obj]})
+          Result.add_relation_data(result, {parent_ref, field_name(emitter), [obj]})
         else
           result
         end
 
-      field_data(next_path, obj, fields, result)
+      field_data(next_path, Ref.from(obj), fields, result)
     else
       result
     end
   end
 
   # List
-  defp data(path, parent, %{values: values} = field, result) do
+  defp data(path, parent_ref, %{values: values} = field, result) do
     if on_path?(field, path) do
       case path do
         [next, pos | rest] ->
           val = Enum.at(values, pos)
-          data([next | rest], parent, val, result)
+          data([next | rest], parent_ref, val, result)
 
         _ ->
-          Enum.reduce(values, result, fn val, acc ->
-            data(path, parent, val, acc)
-          end)
+          Enum.reduce(values, result, &data(path, parent_ref, &1, &2))
       end
-
-      # Enum.reduce(values, result, &data(path, parent, &1, &2))
     else
       result
     end
@@ -135,19 +136,19 @@ defmodule Weaver.Absinthe.Phase.Document.Result do
 
   defp field_data(_path, _parent, [], result), do: result
 
-  defp field_data(path, parent, [%Absinthe.Resolution{} | fields], result) do
-    field_data(path, parent, fields, result)
+  defp field_data(path, parent_ref, [%Absinthe.Resolution{} | fields], result) do
+    field_data(path, parent_ref, fields, result)
   end
 
-  defp field_data(path, parent, [field | fields], result) do
+  defp field_data(path, parent_ref, [field | fields], result) do
     result =
       if on_path?(field, path) do
-        data(path, parent, field, result)
+        data(path, parent_ref, field, result)
       else
         result
       end
 
-    field_data(path, parent, fields, result)
+    field_data(path, parent_ref, fields, result)
   end
 
   defp field_name(%{alias: nil, name: name}), do: name
