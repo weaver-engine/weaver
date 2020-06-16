@@ -92,27 +92,22 @@ defmodule Weaver.Absinthe.Phase.Document.Result do
     field_data(next_path(field, path), nil, fields, result)
   end
 
-  defp data(path, nil, %{fields: fields, root_value: obj} = field, result) do
-    field_data(next_path(field, path), Ref.from(obj), fields, result)
+  defp data(path, nil, %{fields: fields} = field, result) do
+    field_data(next_path(field, path), to_ref(field), fields, result)
   end
 
-  defp data(
-         path,
-         parent_ref,
-         %{fields: fields, emitter: emitter, root_value: obj} = field,
-         result
-       ) do
+  defp data(path, parent_ref, %{fields: fields, emitter: emitter} = field, result) do
     next_path = next_path(field, path)
 
     if next_path do
       result =
         if next_path == [] do
-          Result.add_relation_data(result, {parent_ref, field_name(emitter), [obj]})
+          Result.add_relation_data(result, {parent_ref, field_name(emitter), [to_ref(field)]})
         else
           result
         end
 
-      field_data(next_path, Ref.from(obj), fields, result)
+      field_data(next_path, to_ref(field), fields, result)
     else
       result
     end
@@ -171,4 +166,14 @@ defmodule Weaver.Absinthe.Phase.Document.Result do
   end
 
   defp next_path(_field, []), do: []
+
+  defp to_ref(%{root_value: obj, fields: fields}) do
+    case fields do
+      [%{emitter: %{alias: "__weaver_id"}, value: id} | _] ->
+        %Ref{id: id}
+
+      _ ->
+        Ref.from(obj)
+    end
+  end
 end
