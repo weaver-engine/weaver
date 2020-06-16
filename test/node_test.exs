@@ -5,11 +5,11 @@ defmodule Weaver.NodeTest do
 
   describe "id_for/1" do
     test "uses :id field of a Map" do
-      assert id_for(%{name: "Carol", id: 12366}) == 12366
+      assert id_for(%{name: "Carol", id: 12_366}) == 12_366
     end
 
     test "uses \"id\" field of a Map" do
-      assert id_for(%{"name" => "Carol", "id" => 12366}) == 12366
+      assert id_for(%{"name" => "Carol", "id" => 12_366}) == 12_366
     end
 
     test "raises error if not implemented" do
