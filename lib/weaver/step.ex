@@ -2,10 +2,10 @@ defmodule Weaver.Step do
   @moduledoc """
   Core processing logic for each chunk of streamed data.
   """
-  alias Weaver.{Marker, Resolvers}
+  alias Weaver.Marker
 
-  def process_resolved(resolved, step, cache, parent_ref, field) do
-    case analyze_resolved(resolved, step) do
+  def process_resolved(resolved, step, cache, parent_ref, field, order, id_for) do
+    case analyze_resolved(resolved, step, order, id_for) do
       {:entire_data, []} ->
         meta = meta_delete_all(cache, parent_ref, field)
 
@@ -13,7 +13,7 @@ defmodule Weaver.Step do
 
       {:entire_data, objs} ->
         meta =
-          [{:add, parent_ref, field, Resolvers.start_marker(objs)}] ++
+          [{:add, parent_ref, field, start_marker(objs, order, id_for)}] ++
             meta_delete_all(cache, parent_ref, field)
 
         {objs, meta, nil}
@@ -26,9 +26,11 @@ defmodule Weaver.Step do
         {objs, meta, nil}
 
       # no gap or gap not closed -> continue with this marker
-      {:continue, objs, new_chunk_end} ->
+      {:continue, objs, cursor} ->
+        new_chunk_end = end_marker(objs, order, id_for, cursor)
+
         meta = [
-          first_meta(step, resolved, parent_ref, field),
+          first_meta(step, resolved, parent_ref, field, order, id_for),
           {:add, parent_ref, field, new_chunk_end}
         ]
 
@@ -39,7 +41,7 @@ defmodule Weaver.Step do
       # gap closed -> look up the next chunk start in next iteration
       {:gap_closed, objs} ->
         meta = [
-          first_meta(step, resolved, parent_ref, field),
+          first_meta(step, resolved, parent_ref, field, order, id_for),
           {:del, parent_ref, field, step.next_chunk_start}
         ]
 
@@ -55,12 +57,19 @@ defmodule Weaver.Step do
     end
   end
 
-  defp first_meta(step = %{prev_chunk_end: %Marker{}}, _resolved, parent_ref, field) do
+  defp first_meta(
+         step = %{prev_chunk_end: %Marker{}},
+         _resolved,
+         parent_ref,
+         field,
+         _order,
+         _id_for
+       ) do
     {:del, parent_ref, field, step.prev_chunk_end}
   end
 
-  defp first_meta(_step, {:continue, objs, _marker}, parent_ref, field) do
-    {:add, parent_ref, field, Resolvers.start_marker(objs)}
+  defp first_meta(_step, {:continue, objs, _marker}, parent_ref, field, order, id_for) do
+    {:add, parent_ref, field, start_marker(objs, order, id_for)}
   end
 
   defp meta_delete_all(cache, parent_ref, field, opts \\ []) do
@@ -69,30 +78,44 @@ defmodule Weaver.Step do
     |> Enum.map(&{:del, parent_ref, field, &1})
   end
 
-  defp analyze_resolved({:done, objs}, %{prev_chunk_end: %Marker{}}) do
+  defp analyze_resolved({:done, objs}, %{prev_chunk_end: %Marker{}}, _order, _id_for) do
     {:last_data, objs}
   end
 
-  defp analyze_resolved({:done, objs}, _) do
+  defp analyze_resolved({:done, objs}, _, _order, _id_for) do
     {:entire_data, objs}
   end
 
   # no gap
-  defp analyze_resolved({:continue, objs, new_chunk_end}, %{next_chunk_start: nil}) do
-    {:continue, objs, new_chunk_end}
+  defp analyze_resolved({:continue, objs, cursor}, %{next_chunk_start: nil}, _order, _id_for) do
+    {:continue, objs, cursor}
   end
 
   # gap closed?
-  defp analyze_resolved({:continue, objs, new_chunk_end}, step = %{}) do
-    case Enum.split_while(objs, &before_marker?(&1, step.next_chunk_start)) do
-      {objs, []} -> {:continue, objs, new_chunk_end}
+  defp analyze_resolved({:continue, objs, cursor}, step = %{}, order, id_for) do
+    case Enum.split_while(objs, &before_marker?(&1, step.next_chunk_start, order, id_for)) do
+      {objs, []} -> {:continue, objs, cursor}
       {objs, __} -> {:gap_closed, objs}
     end
   end
 
-  defp before_marker?(obj, marker) do
-    Resolvers.marker_val(obj) > marker.val &&
-      Resolvers.id_for(obj) != marker.ref.id
+  defp before_marker?(obj, marker, %{ordered_by: order_field}, id_for) do
+    Map.get(obj, order_field) > marker.val &&
+      id_for.(obj) != marker.ref.id
+  end
+
+  def start_marker(objs, %{ordered_by: order_field}, id_for) do
+    obj = List.first(objs)
+    id = id_for.(obj)
+    val = Map.get(obj, order_field)
+    Marker.chunk_start(id, val)
+  end
+
+  def end_marker(objs, %{ordered_by: order_field}, id_for, cursor) do
+    obj = List.last(objs)
+    id = id_for.(obj)
+    val = Map.get(obj, order_field)
+    Marker.chunk_end(id, val, cursor)
   end
 
   def load_markers(step = %{next_chunk_start: val}, _opts, _cache, _parent_ref, _field)

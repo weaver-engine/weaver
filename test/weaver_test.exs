@@ -232,7 +232,7 @@ defmodule WeaverTest do
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
          Marker.chunk_start("Tweet:11", 11)},
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         Marker.chunk_end("Tweet:10", 10)}
+         Marker.chunk_end("Tweet:10", 10, 10)}
       ])
       |> assert_next_path([%{name: "favorites"} | _])
       |> assert_next_state(%{
@@ -254,12 +254,13 @@ defmodule WeaverTest do
       ])
       |> assert_meta([
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         Marker.chunk_end("Tweet:10", 10)},
-        {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites", Marker.chunk_end("Tweet:8", 8)}
+         Marker.chunk_end("Tweet:10", 10, 10)},
+        {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         Marker.chunk_end("Tweet:8", 8, 8)}
       ])
       |> assert_next_path([%{name: "favorites"} | _])
       |> assert_next_state(%{
-        prev_chunk_end: %Marker{type: :chunk_end, ref: %Ref{id: "Tweet:8"}, val: 8}
+        prev_chunk_end: %Marker{type: :chunk_end, ref: %Ref{id: "Tweet:8"}, val: 8, cursor: 8}
       })
       |> assert_dispatched_paths([
         [%{name: "retweets"} | _],
@@ -279,14 +280,15 @@ defmodule WeaverTest do
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
          Marker.chunk_start("Tweet:20", 20)},
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         Marker.chunk_end("Tweet:16", 16)},
+         Marker.chunk_end("Tweet:16", 16, 16)},
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
          Marker.chunk_start("Tweet:12", 12)},
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         Marker.chunk_end("Tweet:12", 12)},
+         Marker.chunk_end("Tweet:12", 12, 12)},
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
          Marker.chunk_start("Tweet:10", 10)},
-        {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites", Marker.chunk_end("Tweet:8", 8)},
+        {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         Marker.chunk_end("Tweet:8", 8, 8)},
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
          Marker.chunk_start("Tweet:7", 7)}
       ]
@@ -342,9 +344,9 @@ defmodule WeaverTest do
       ])
       |> assert_meta([
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         Marker.chunk_end("Tweet:16", 16)},
+         Marker.chunk_end("Tweet:16", 16, 16)},
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         Marker.chunk_end("Tweet:14", 14)}
+         Marker.chunk_end("Tweet:14", 14, 14)}
       ])
       |> assert_next_path([%{name: "favorites"} | _])
       |> assert_next_state(%{
@@ -363,7 +365,7 @@ defmodule WeaverTest do
       ])
       |> assert_meta([
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         Marker.chunk_end("Tweet:14", 14)},
+         Marker.chunk_end("Tweet:14", 14, 14)},
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
          Marker.chunk_start("Tweet:12", 12)}
       ])
@@ -384,7 +386,7 @@ defmodule WeaverTest do
       ])
       |> assert_meta([
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         Marker.chunk_end("Tweet:12", 12)},
+         Marker.chunk_end("Tweet:12", 12, 12)},
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
          Marker.chunk_start("Tweet:10", 10)}
       ])
@@ -402,7 +404,8 @@ defmodule WeaverTest do
       |> assert_data([])
       |> assert_dispatched_paths([])
       |> assert_meta([
-        {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites", Marker.chunk_end("Tweet:8", 8)},
+        {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         Marker.chunk_end("Tweet:8", 8, 8)},
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
          Marker.chunk_start("Tweet:7", 7)}
       ])
@@ -429,7 +432,7 @@ defmodule WeaverTest do
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
          Marker.chunk_start("Tweet:20", 20)},
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         Marker.chunk_end("Tweet:20", 20)},
+         Marker.chunk_end("Tweet:20", 20, 20)},
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
          Marker.chunk_start("Tweet:16", 16)}
       ]
@@ -480,14 +483,15 @@ defmodule WeaverTest do
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
          Marker.chunk_start("Tweet:20", 20)},
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         Marker.chunk_end("Tweet:16", 16)},
+         Marker.chunk_end("Tweet:16", 16, 16)},
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
          Marker.chunk_start("Tweet:12", 12)},
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         Marker.chunk_end("Tweet:12", 12)},
+         Marker.chunk_end("Tweet:12", 12, 12)},
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
          Marker.chunk_start("Tweet:10", 10)},
-        {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites", Marker.chunk_end("Tweet:8", 8)},
+        {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         Marker.chunk_end("Tweet:8", 8, 8)},
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
          Marker.chunk_start("Tweet:7", 7)}
       ]
@@ -555,7 +559,7 @@ defmodule WeaverTest do
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
          Marker.chunk_start("Tweet:21", 21)},
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         Marker.chunk_end("Tweet:21", 21)}
+         Marker.chunk_end("Tweet:21", 21, 21)}
       ])
       |> weave_next(
         Twitter,
@@ -564,18 +568,19 @@ defmodule WeaverTest do
       )
       |> assert_meta([
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         Marker.chunk_end("Tweet:21", 21)},
+         Marker.chunk_end("Tweet:21", 21, 21)},
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
          Marker.chunk_start("Tweet:20", 20)},
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         Marker.chunk_end("Tweet:16", 16)},
+         Marker.chunk_end("Tweet:16", 16, 16)},
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
          Marker.chunk_start("Tweet:12", 12)},
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         Marker.chunk_end("Tweet:12", 12)},
+         Marker.chunk_end("Tweet:12", 12, 12)},
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
          Marker.chunk_start("Tweet:10", 10)},
-        {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites", Marker.chunk_end("Tweet:8", 8)},
+        {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         Marker.chunk_end("Tweet:8", 8, 8)},
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
          Marker.chunk_start("Tweet:7", 7)}
       ])
@@ -605,23 +610,24 @@ defmodule WeaverTest do
       ])
       |> assert_meta([
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         Marker.chunk_end("Tweet:16", 16)},
+         Marker.chunk_end("Tweet:16", 16, 16)},
         {:add, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         Marker.chunk_end("Tweet:15", 15)}
+         Marker.chunk_end("Tweet:15", 15, 15)}
       ])
 
       # favorites last pt.
       |> weave_next(Twitter, :favorites, twitter_mock_for(user, favorites, max_id: 14))
       |> assert_meta([
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         Marker.chunk_end("Tweet:15", 15)},
+         Marker.chunk_end("Tweet:15", 15, 15)},
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
          Marker.chunk_start("Tweet:12", 12)},
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         Marker.chunk_end("Tweet:12", 12)},
+         Marker.chunk_end("Tweet:12", 12, 12)},
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
          Marker.chunk_start("Tweet:10", 10)},
-        {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites", Marker.chunk_end("Tweet:8", 8)},
+        {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         Marker.chunk_end("Tweet:8", 8, 8)},
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
          Marker.chunk_start("Tweet:7", 7)}
       ])
@@ -640,14 +646,15 @@ defmodule WeaverTest do
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
          Marker.chunk_start("Tweet:20", 20)},
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         Marker.chunk_end("Tweet:16", 16)},
+         Marker.chunk_end("Tweet:16", 16, 16)},
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
          Marker.chunk_start("Tweet:12", 12)},
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
-         Marker.chunk_end("Tweet:12", 12)},
+         Marker.chunk_end("Tweet:12", 12, 12)},
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
          Marker.chunk_start("Tweet:10", 10)},
-        {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites", Marker.chunk_end("Tweet:8", 8)},
+        {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
+         Marker.chunk_end("Tweet:8", 8, 8)},
         {:del, %Ref{id: "TwitterUser:elixirdigest"}, "favorites",
          Marker.chunk_start("Tweet:7", 7)}
       ])

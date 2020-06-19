@@ -24,7 +24,6 @@ defmodule Weaver do
           }
 
     def new(id) when is_binary(id), do: %__MODULE__{id: id}
-    def from(obj), do: new(Weaver.Resolvers.id_for(obj))
   end
 
   defmodule Marker do
@@ -37,21 +36,22 @@ defmodule Weaver do
     data in `Weaver.Graph`.
     """
 
-    @enforce_keys [:type, :ref, :val]
-    defstruct @enforce_keys
+    @enforce_keys [:type, :ref]
+    defstruct @enforce_keys ++ [:val, :cursor]
 
     @type t() :: %__MODULE__{
             ref: any(),
             val: any(),
+            cursor: any(),
             type: :chunk_start | :chunk_end
           }
 
-    def chunk_start(id, val) do
+    def chunk_start(id, val \\ nil) do
       %__MODULE__{type: :chunk_start, ref: %Ref{id: id}, val: val}
     end
 
-    def chunk_end(id, val) do
-      %__MODULE__{type: :chunk_end, ref: %Ref{id: id}, val: val}
+    def chunk_end(id, val, cursor) do
+      %__MODULE__{type: :chunk_end, ref: %Ref{id: id}, val: val, cursor: cursor}
     end
   end
 
