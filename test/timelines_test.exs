@@ -43,16 +43,16 @@ defmodule Weaver.TimelinesTest do
     |> assert_data([
       {%Ref{id: "Tweet:#{tweet2.id}"}, "text", tweet2.full_text},
       {%Ref{id: "Tweet:#{tweet2.id}"}, "__weaver_type", "Tweet"},
-      {%Ref{id: "Tweet:#{tweet2.id}"}, "__weaver_id", "Tweet:#{tweet2.id}"},
+      {%Ref{id: "Tweet:#{tweet2.id}"}, "__weaver_id", "#{tweet2.id}"},
       {user_ref, "tweets", %Ref{id: "Tweet:#{tweet2.id}"}},
       {%Ref{id: "Tweet:#{tweet1.id}"}, "text", tweet1.full_text},
       {%Ref{id: "Tweet:#{tweet1.id}"}, "__weaver_type", "Tweet"},
-      {%Ref{id: "Tweet:#{tweet1.id}"}, "__weaver_id", "Tweet:#{tweet1.id}"},
+      {%Ref{id: "Tweet:#{tweet1.id}"}, "__weaver_id", "#{tweet1.id}"},
       {user_ref, "tweets", %Ref{id: "Tweet:#{tweet1.id}"}}
     ])
     |> assert_meta([
       {:add, user_ref, "tweets", Marker.chunk_start("Tweet:#{tweet1.id}", tweet1.id)},
-      {:add, user_ref, "tweets", Marker.chunk_end("Tweet:#{tweet2.id}", tweet2.id)}
+      {:add, user_ref, "tweets", Marker.chunk_end("Tweet:#{tweet2.id}", tweet2.id, tweet2.id)}
     ])
     |> assert_dispatched_paths([])
     |> assert_next_path([%{name: "tweets"}, %{name: "node"}, %{name: nil}])

@@ -144,11 +144,12 @@ defmodule Weaver.Graph do
 
           [
             "#{sub_var} <weaver.markers> #{marker_var} .",
-            "#{marker_var} <weaver.markers.predicate> #{inspect(predicate)} .",
+            "#{marker_var} <weaver.markers.predicate> #{property(predicate)} .",
             "#{marker_var} <weaver.markers.intValue> #{val_var} .",
             "#{marker_var} <weaver.markers.object> #{ref_var} .",
-            ~s|#{marker_var} <weaver.markers.type> "#{type_str}" .|
+            "#{marker_var} <weaver.markers.type> #{property(type_str)} ."
           ]
+          |> maybe_add_nquad(marker_var, "weaver.markers.cursor", marker.cursor)
 
         {subject, predicate, object} ->
           sub = property(subject, varnames)
@@ -184,11 +185,12 @@ defmodule Weaver.Graph do
 
           [
             "#{sub_var} <weaver.markers> #{marker_var} .",
-            "#{marker_var} <weaver.markers.predicate> #{inspect(predicate)} .",
+            "#{marker_var} <weaver.markers.predicate> #{property(predicate)} .",
             "#{marker_var} <weaver.markers.intValue> #{val_var} .",
             "#{marker_var} <weaver.markers.object> #{ref_var} .",
-            ~s|#{marker_var} <weaver.markers.type> "#{type_str}" .|
+            "#{marker_var} <weaver.markers.type> #{property(type_str)} ."
           ]
+          |> maybe_add_nquad(marker_var, "weaver.markers.cursor", marker.cursor)
 
         _other ->
           []
@@ -197,14 +199,14 @@ defmodule Weaver.Graph do
     id_statements =
       Enum.flat_map(varnames, fn
         {%Ref{id: id}, varname} ->
-          ["uid(#{varname}) <id> #{inspect(id)} ."]
+          ["uid(#{varname}) <id> #{property(id)} ."]
 
         {%Marker{}, _varname} ->
           []
       end)
 
     result =
-      [delete: del_statements, set: id_statements ++ add_statements]
+      [delete: del_statements, set: add_statements ++ id_statements]
       |> Enum.flat_map(fn
         {_op, []} -> []
         {op, list} -> [%{op => Enum.join(list, "\n")}]
@@ -236,11 +238,12 @@ defmodule Weaver.Graph do
 
     query = ~s"""
     {
-      markers(func: eq(id, #{inspect(ref.id)})) {
+      markers(func: eq(id, #{property(ref.id)})) {
         weaver.markers @filter(#{filters_str}) (orderdesc: weaver.markers.intValue, orderdesc: weaver.markers.type#{
       limit_str
     }) {
           weaver.markers.intValue
+          weaver.markers.cursor
           weaver.markers.object { id }
           weaver.markers.type
         }
@@ -260,11 +263,12 @@ defmodule Weaver.Graph do
                 "weaver.markers.intValue" => val,
                 "weaver.markers.type" => type_str,
                 "weaver.markers.object" => %{"id" => id}
-              } ->
+              } = payload ->
                 %Marker{
                   type: to_marker_type(type_str),
                   val: val,
-                  ref: %Ref{id: id}
+                  ref: %Ref{id: id},
+                  cursor: payload["weaver.markers.cursor"]
                 }
             end)
 
@@ -281,7 +285,7 @@ defmodule Weaver.Graph do
     result =
       ~s"""
       {
-        countRelation(func: eq(id, #{inspect(id)})) {
+        countRelation(func: eq(id, #{property(id)})) {
           c : count(#{relation})
         }
       }
@@ -398,11 +402,23 @@ defmodule Weaver.Graph do
     end
   end
 
-  defp property(int, _varnames) when is_integer(int) do
+  defp property(other, _varnames) do
+    property(other)
+  end
+
+  defp property(int) when is_integer(int) do
     ~s|"#{int}"^^<xs:int>|
   end
 
-  defp property(other, _varnames), do: inspect(other)
+  defp property(other), do: inspect(other)
+
+  defp maybe_add_nquad(list, _sub, _pred, nil) do
+    list
+  end
+
+  defp maybe_add_nquad(list, sub, pred, obj) do
+    ["#{sub} <#{pred}> #{property(obj)} ." | list]
+  end
 
   @doc """
   Generates a variable name from a number.

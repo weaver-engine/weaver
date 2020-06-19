@@ -32,9 +32,9 @@ defmodule Weaver.Step.Result do
     {[tuple | data], meta, errors, dispatched, next}
   end
 
-  def add_relation_data(result, {from = %Ref{}, predicate, [obj | objs]}) do
+  def add_relation_data(result, {from = %Ref{}, predicate, [obj_ref = %Ref{} | objs]}) do
     result
-    |> add_data({from, predicate, Ref.from(obj)})
+    |> add_data({from, predicate, obj_ref})
     |> add_relation_data({from, predicate, objs})
   end
 

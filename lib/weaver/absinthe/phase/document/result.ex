@@ -167,13 +167,109 @@ defmodule Weaver.Absinthe.Phase.Document.Result do
 
   defp next_path(_field, []), do: []
 
-  defp to_ref(%{root_value: obj, fields: fields}) do
-    case fields do
-      [%{emitter: %{alias: "__weaver_id"}, value: id} | _] ->
-        %Ref{id: id}
+  defp to_ref(field) do
+    %Ref{id: "#{type_for(field)}:#{id_for(field)}"}
+  end
 
-      _ ->
-        Ref.from(obj)
+  defp id_for(%{emitter: %{schema_node: %{type: %{of_type: schema_type}}}} = field) do
+    id_for(put_in(field.emitter.schema_node.type, schema_type))
+  end
+
+  defp id_for(%{emitter: %{schema_node: %{type: schema_type}}, root_value: obj}) do
+    id_fun =
+      schema_type
+      |> get_concrete_type(obj, %{schema: schema_type.definition})
+      |> Continue.id_fun_for()
+
+    id_fun.(obj)
+  end
+
+  defp type_for(%{emitter: %{schema_node: %{type: %{of_type: schema_type}}}} = field) do
+    type_for(put_in(field.emitter.schema_node.type, schema_type))
+  end
+
+  defp type_for(%{emitter: %{schema_node: %{type: schema_type}}, root_value: obj}) do
+    schema_type
+    |> get_concrete_type(obj, %{schema: schema_type.definition})
+    |> Map.get(:name)
+  end
+
+  defp get_concrete_type(%Type.Union{} = parent_type, source, res) do
+    # Type.Union.resolve_type(parent_type, source, res)
+    resolve_union_type(parent_type, source, res)
+  end
+
+  defp get_concrete_type(%Type.Interface{} = parent_type, source, res) do
+    # Type.Interface.resolve_type(parent_type, source, res)
+    resolve_interface_type(parent_type, source, res)
+  end
+
+  defp get_concrete_type(parent_type, _source, _res) do
+    parent_type
+  end
+
+  def resolve_union_type(type, object, env, opts \\ [lookup: true])
+
+  def resolve_union_type(%{types: types} = union, obj, env = %{schema: schema}, opts) do
+    if resolver = Type.function(union, :resolve_type) do
+      case resolver.(obj, env) do
+        nil ->
+          nil
+
+        ident when is_atom(ident) ->
+          if opts[:lookup] do
+            Absinthe.Schema.lookup_type(schema, ident)
+          else
+            ident
+          end
+      end
+    else
+      type_name =
+        Enum.find(types, fn
+          %{is_type_of: nil} ->
+            false
+
+          type ->
+            type = Absinthe.Schema.lookup_type(schema, type)
+            Absinthe.Type.function(type, :is_type_of).(obj)
+        end)
+
+      if opts[:lookup] do
+        Absinthe.Schema.lookup_type(schema, type_name)
+      else
+        type_name
+      end
+    end
+  end
+
+  def resolve_interface_type(type, obj, env, opts \\ [lookup: true])
+
+  def resolve_interface_type(interface, obj, env = %{schema: schema}, opts) do
+    implementors = Absinthe.Schema.implementors(schema, interface.identifier)
+
+    if resolver = Type.function(interface, :resolve_type) do
+      case resolver.(obj, env) do
+        nil ->
+          nil
+
+        ident when is_atom(ident) ->
+          if opts[:lookup] do
+            Absinthe.Schema.lookup_type(schema, ident)
+          else
+            ident
+          end
+      end
+    else
+      type_name =
+        Enum.find(implementors, fn type ->
+          Absinthe.Type.function(type, :is_type_of).(obj)
+        end)
+
+      if opts[:lookup] do
+        Absinthe.Schema.lookup_type(schema, type_name)
+      else
+        type_name
+      end
     end
   end
 end

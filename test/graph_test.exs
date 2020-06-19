@@ -24,11 +24,11 @@ defmodule Weaver.GraphTest do
 
       meta = [
         {:add, user1, "favorites", Marker.chunk_start("Tweet:140", 140)},
-        {:add, user1, "favorites", Marker.chunk_end("Tweet:134", 134)},
+        {:add, user1, "favorites", Marker.chunk_end("Tweet:134", 134, 134)},
         {:add, user1, "favorites", Marker.chunk_start("Tweet:34", 34)},
-        {:add, user1, "favorites", Marker.chunk_end("Tweet:34", 34)},
+        {:add, user1, "favorites", Marker.chunk_end("Tweet:34", 34, 34)},
         {:add, user1, "favorites", Marker.chunk_start("Tweet:4", 4)},
-        {:add, user1, "favorites", Marker.chunk_end("Tweet:3", 3)},
+        {:add, user1, "favorites", Marker.chunk_end("Tweet:3", 3, 3)},
         {:add, user1, "favorites", Marker.chunk_start("Tweet:1", 1)}
       ]
 
@@ -52,25 +52,25 @@ defmodule Weaver.GraphTest do
     test "markers", %{user1: user1} do
       assert {:ok, [marker1, marker2]} = markers(user1, "favorites", limit: 2)
       assert marker1 == Marker.chunk_start("Tweet:140", 140)
-      assert marker2 == Marker.chunk_end("Tweet:134", 134)
+      assert marker2 == Marker.chunk_end("Tweet:134", 134, 134)
     end
 
     test "delete markers", %{user1: user1} do
       assert %{} = store!([], [{:del, user1, "favorites", Marker.chunk_start("Tweet:140", 140)}])
 
       assert {:ok, [marker2]} = markers(user1, "favorites", limit: 1)
-      assert marker2 == Marker.chunk_end("Tweet:134", 134)
+      assert marker2 == Marker.chunk_end("Tweet:134", 134, 134)
     end
 
     test "delete and add same markers", %{user1: user1} do
       assert %{} =
                store!([], [
-                 {:add, user1, "favorites", Marker.chunk_end("Tweet:140", 140)},
+                 {:add, user1, "favorites", Marker.chunk_end("Tweet:140", 140, 140)},
                  {:del, user1, "favorites", Marker.chunk_start("Tweet:140", 140)}
                ])
 
       assert {:ok, [marker2]} = markers(user1, "favorites", limit: 1)
-      assert marker2 == Marker.chunk_end("Tweet:140", 140)
+      assert marker2 == Marker.chunk_end("Tweet:140", 140, 140)
     end
 
     test "markers less_than", %{user1: user1} do
@@ -78,9 +78,9 @@ defmodule Weaver.GraphTest do
 
       assert markers == [
                Marker.chunk_start("Tweet:34", 34),
-               Marker.chunk_end("Tweet:34", 34),
+               Marker.chunk_end("Tweet:34", 34, 34),
                Marker.chunk_start("Tweet:4", 4),
-               Marker.chunk_end("Tweet:3", 3),
+               Marker.chunk_end("Tweet:3", 3, 3),
                Marker.chunk_start("Tweet:1", 1)
              ]
     end

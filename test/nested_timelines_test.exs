@@ -57,7 +57,7 @@ defmodule Weaver.NestedTimelinesTest do
     ])
     |> assert_meta([
       {:add, user_ref, "favorites", Marker.chunk_start("Tweet:11", 11)},
-      {:add, user_ref, "favorites", Marker.chunk_end("Tweet:10", 10)}
+      {:add, user_ref, "favorites", Marker.chunk_end("Tweet:10", 10, 10)}
     ])
     |> assert_dispatched_paths([])
     |> assert_next_path([%{name: "favorites"}, %{name: "node"}, %{name: nil}])
@@ -71,8 +71,8 @@ defmodule Weaver.NestedTimelinesTest do
       {user_ref, "favorites", %Ref{id: "Tweet:9"}}
     ])
     |> assert_meta([
-      {:del, user_ref, "favorites", Marker.chunk_end("Tweet:10", 10)},
-      {:add, user_ref, "favorites", Marker.chunk_end("Tweet:8", 8)}
+      {:del, user_ref, "favorites", Marker.chunk_end("Tweet:10", 10, 10)},
+      {:add, user_ref, "favorites", Marker.chunk_end("Tweet:8", 8, 8)}
     ])
     |> assert_dispatched_paths([])
     |> assert_next_path([%{name: "favorites"}, %{name: "node"}, %{name: nil}])
@@ -81,7 +81,7 @@ defmodule Weaver.NestedTimelinesTest do
     |> weave_next(Twitter, :favorites, twitter_mock_for(user, favorites, max_id: 7))
     |> assert_data([])
     |> assert_meta([
-      {:del, user_ref, "favorites", Marker.chunk_end("Tweet:8", 8)}
+      {:del, user_ref, "favorites", Marker.chunk_end("Tweet:8", 8, 8)}
     ])
     |> assert_dispatched_paths([])
     |> refute_next()
@@ -101,7 +101,7 @@ defmodule Weaver.NestedTimelinesTest do
       ])
       |> assert_meta([
         {:add, user_ref, "tweets", Marker.chunk_start("Tweet:#{tweet1.id}", tweet1.id)},
-        {:add, user_ref, "tweets", Marker.chunk_end("Tweet:#{tweet2.id}", tweet2.id)}
+        {:add, user_ref, "tweets", Marker.chunk_end("Tweet:#{tweet2.id}", tweet2.id, tweet2.id)}
       ])
       |> assert_dispatched_paths([
         [%{name: "retweets"} | _],
@@ -124,7 +124,7 @@ defmodule Weaver.NestedTimelinesTest do
       {:add, %Ref{id: "Tweet:#{tweet1.id}"}, "retweets",
        Marker.chunk_start("Tweet:#{retweet1.id}", retweet1.id)},
       {:add, %Ref{id: "Tweet:#{tweet1.id}"}, "retweets",
-       Marker.chunk_end("Tweet:#{retweet1.id}", retweet1.id)}
+       Marker.chunk_end("Tweet:#{retweet1.id}", retweet1.id, retweet1.id)}
     ])
     |> assert_dispatched_paths([])
     |> assert_next_path([%{name: "retweets"}, 0, %{name: "tweets"}, %{name: "node"}, %{name: nil}])
@@ -134,7 +134,7 @@ defmodule Weaver.NestedTimelinesTest do
     |> assert_data([])
     |> assert_meta([
       {:del, %Ref{id: "Tweet:#{tweet1.id}"}, "retweets",
-       Marker.chunk_end("Tweet:#{retweet1.id}", retweet1.id)}
+       Marker.chunk_end("Tweet:#{retweet1.id}", retweet1.id, retweet1.id)}
     ])
     |> assert_dispatched_paths([])
     |> refute_next()
@@ -153,7 +153,7 @@ defmodule Weaver.NestedTimelinesTest do
       {:add, %Ref{id: "Tweet:#{tweet2.id}"}, "retweets",
        Marker.chunk_start("Tweet:#{retweet2.id}", retweet2.id)},
       {:add, %Ref{id: "Tweet:#{tweet2.id}"}, "retweets",
-       Marker.chunk_end("Tweet:#{retweet2.id}", retweet2.id)}
+       Marker.chunk_end("Tweet:#{retweet2.id}", retweet2.id, retweet2.id)}
     ])
     |> assert_dispatched_paths([])
     |> assert_next_path([%{name: "retweets"}, 1, %{name: "tweets"}, %{name: "node"}, %{name: nil}])
@@ -163,7 +163,7 @@ defmodule Weaver.NestedTimelinesTest do
     |> assert_data([])
     |> assert_meta([
       {:del, %Ref{id: "Tweet:#{tweet2.id}"}, "retweets",
-       Marker.chunk_end("Tweet:#{retweet2.id}", retweet2.id)}
+       Marker.chunk_end("Tweet:#{retweet2.id}", retweet2.id, retweet2.id)}
     ])
     |> assert_dispatched_paths([])
     |> refute_next()
